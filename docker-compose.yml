@@ -1,0 +1,33 @@
+services:
+  ocelot:
+    build: .
+    privileged: true
+    network_mode: host
+    volumes:
+      # Project source — live editing
+      - ./:/ws/src/ocelot
+
+      # Bind-mount host Python packages so picamera2 + libcamera work.
+      # Pi OS Bookworm has the right libcamera built for the Pi 5 camera stack.
+      # The container's Ubuntu packages would be incompatible.
+      - /usr/lib/python3/dist-packages/picamera2:/usr/lib/python3/dist-packages/picamera2:ro
+      - /usr/lib/python3/dist-packages/libcamera:/usr/lib/python3/dist-packages/libcamera:ro
+      - /usr/lib/python3/dist-packages/pykms:/usr/lib/python3/dist-packages/pykms:ro
+      - /usr/lib/python3/dist-packages/pidng:/usr/lib/python3/dist-packages/pidng:ro
+      - /usr/lib/python3/dist-packages/piexif:/usr/lib/python3/dist-packages/piexif:ro
+      - /usr/lib/python3/dist-packages/simplejpeg:/usr/lib/python3/dist-packages/simplejpeg:ro
+
+      # libcamera shared libraries (Pi 5 RP1 camera stack)
+      - /usr/lib/aarch64-linux-gnu/libcamera:/usr/lib/aarch64-linux-gnu/libcamera:ro
+      - /usr/lib/aarch64-linux-gnu/libcamera.so.0.3:/usr/lib/aarch64-linux-gnu/libcamera.so.0.3:ro
+      - /usr/lib/aarch64-linux-gnu/libcamera.so.0.3.1:/usr/lib/aarch64-linux-gnu/libcamera.so.0.3.1:ro
+      - /usr/lib/aarch64-linux-gnu/libcamera-base.so.0.3:/usr/lib/aarch64-linux-gnu/libcamera-base.so.0.3:ro
+      - /usr/lib/aarch64-linux-gnu/libcamera-base.so.0.3.1:/usr/lib/aarch64-linux-gnu/libcamera-base.so.0.3.1:ro
+      - /usr/lib/aarch64-linux-gnu/libcamera.so:/usr/lib/aarch64-linux-gnu/libcamera.so:ro
+      - /usr/lib/aarch64-linux-gnu/libcamera-base.so:/usr/lib/aarch64-linux-gnu/libcamera-base.so:ro
+
+    environment:
+      - ROS_DOMAIN_ID=0
+      - ROS_LOCALHOST_ONLY=1
+    stdin_open: true
+    tty: true
