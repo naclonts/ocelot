@@ -22,6 +22,11 @@ def main():
     cam.configure(config)
     cam.start()
 
+    # Force full sensor FOV — without this, picamera2 may crop to a small
+    # centre region when the output resolution is much smaller than the sensor.
+    full_res = cam.camera_properties['PixelArraySize']
+    cam.set_controls({'ScalerCrop': (0, 0, full_res[0], full_res[1])})
+
     out = sys.stdout.buffer
 
     def shutdown(sig, _frame):
@@ -32,7 +37,7 @@ def main():
     signal.signal(signal.SIGINT, shutdown)
 
     while True:
-        data = cam.capture_array().tobytes()
+        data = cam.capture_array()[::-1, ::-1].tobytes()  # rotate 180° (camera mounted inverted)
         out.write(struct.pack('>I', len(data)) + data)
         out.flush()
 

@@ -29,4 +29,10 @@ def generate_launch_description():
             name='tracker_node',
             parameters=[params],
         ),
+        Node(
+            package='web_video_server',
+            executable='web_video_server',
+            name='web_video_server',
+            parameters=[{'port': 8080}],
+        ),
     ])

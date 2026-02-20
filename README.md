@@ -70,6 +70,25 @@ ros2 topic hz /camera/image_raw
 ros2 topic echo /cmd_vel --no-arr
 ```
 
+## Running Ocelot with video streaming over web
+
+On Pi:
+
+```sh
+docker compose run --rm ocelot bash -c "
+  source /opt/ros/jazzy/setup.bash &&
+  source /ws/install/setup.bash &&
+  ros2 launch ocelot tracker_launch.py
+"
+```
+
+Then get the Pi's IP and visit in browser to see cam:
+
+```sh
+http://<pi-eth-ip>:8080/stream?topic=/camera/image_raw
+```
+
+
 ## Project Structure
 
 ```

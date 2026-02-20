@@ -14,7 +14,7 @@ servo_node:
 tracker_node:
   ros__parameters:
     enabled: true
-    kp_pan: 0.3          # proportional gain (velocity per normalized-error unit)
+    kp_pan: -0.3         # negative = pan direction is inverted on this mount
     kp_tilt: 0.3
     deadband: 30         # pixel radius of center dead zone
     max_velocity: 2.0    # velocity clamp (units fed to servo velocity_scale)

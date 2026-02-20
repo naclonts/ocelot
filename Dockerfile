@@ -6,6 +6,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-jazzy-cv-bridge \
     ros-jazzy-launch-ros \
+    ros-jazzy-rqt-image-view \
+    ros-jazzy-web-video-server \
     python3-colcon-common-extensions \
     python3-pip \
     python3-opencv \
