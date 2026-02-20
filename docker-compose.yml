@@ -26,6 +26,16 @@ services:
       - /usr/lib/aarch64-linux-gnu/libcamera.so:/usr/lib/aarch64-linux-gnu/libcamera.so:ro
       - /usr/lib/aarch64-linux-gnu/libcamera-base.so:/usr/lib/aarch64-linux-gnu/libcamera-base.so:ro
 
+      # Pi 5 ISP library (required by libcamera on RP1 hardware)
+      - /usr/lib/aarch64-linux-gnu/libpisp.so.1:/usr/lib/aarch64-linux-gnu/libpisp.so.1:ro
+      - /usr/lib/aarch64-linux-gnu/libpisp.so.1.0.7:/usr/lib/aarch64-linux-gnu/libpisp.so.1.0.7:ro
+
+      # Boost 1.74 (Pi OS Bookworm) — Ubuntu Noble has 1.83+, but _libcamera.so needs 1.74
+      - /lib/aarch64-linux-gnu/libboost_filesystem.so.1.74.0:/lib/aarch64-linux-gnu/libboost_filesystem.so.1.74.0:ro
+      - /lib/aarch64-linux-gnu/libboost_log.so.1.74.0:/lib/aarch64-linux-gnu/libboost_log.so.1.74.0:ro
+      - /lib/aarch64-linux-gnu/libboost_log_setup.so.1.74.0:/lib/aarch64-linux-gnu/libboost_log_setup.so.1.74.0:ro
+      - /lib/aarch64-linux-gnu/libboost_thread.so.1.74.0:/lib/aarch64-linux-gnu/libboost_thread.so.1.74.0:ro
+
     environment:
       - ROS_DOMAIN_ID=0
       - ROS_LOCALHOST_ONLY=1

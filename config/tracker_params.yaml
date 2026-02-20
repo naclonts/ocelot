@@ -1,0 +1,16 @@
+camera_node:
+  ros__parameters:
+    fps: 15
+    resolution: [640, 480]
+
+servo_node:
+  ros__parameters:
+    velocity_scale: 30.0
+    pan_center: 90
+    tilt_center: 180
+    pan_limits: [0, 180]
+    tilt_limits: [90, 180]
+
+tracker_node:
+  ros__parameters:
+    enabled: false   # placeholder — no tracking logic yet

@@ -1,0 +1,47 @@
+<?xml version="1.0"?>
+<robot name="ocelot_pan_tilt">
+
+  <!-- Fixed base (mount point on the Pi case / chassis) -->
+  <link name="base_link"/>
+
+  <!-- Pan: rotates around Z axis (yaw). 0-180° range, 90° center. -->
+  <joint name="pan_joint" type="revolute">
+    <parent link="base_link"/>
+    <child link="pan_link"/>
+    <origin xyz="0 0 0.03" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-1.5708" upper="1.5708" effort="1.0" velocity="1.0"/>
+  </joint>
+  <link name="pan_link">
+    <visual>
+      <geometry><box size="0.04 0.04 0.02"/></geometry>
+    </visual>
+  </link>
+
+  <!-- Tilt: rotates around Y axis (pitch). 90-180° range, 180° = forward. -->
+  <joint name="tilt_joint" type="revolute">
+    <parent link="pan_link"/>
+    <child link="tilt_link"/>
+    <origin xyz="0 0 0.03" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="0.0" upper="1.5708" effort="1.0" velocity="1.0"/>
+  </joint>
+  <link name="tilt_link">
+    <visual>
+      <geometry><box size="0.04 0.04 0.02"/></geometry>
+    </visual>
+  </link>
+
+  <!-- Camera fixed to tilt bracket -->
+  <joint name="camera_joint" type="fixed">
+    <parent link="tilt_link"/>
+    <child link="camera_link"/>
+    <origin xyz="0.02 0 0.01" rpy="0 0 0"/>
+  </joint>
+  <link name="camera_link">
+    <visual>
+      <geometry><box size="0.025 0.024 0.009"/></geometry>
+    </visual>
+  </link>
+
+</robot>
