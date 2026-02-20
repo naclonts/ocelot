@@ -22,6 +22,22 @@ _WORKER = os.path.join(os.path.dirname(__file__), 'capture_worker.py')
 _PYTHON311 = '/usr/bin/python3.11'
 
 
+def _worker_env() -> dict:
+    """Build subprocess env with PYTHONPATH that gives python3.11 working numpy + picamera2.
+
+    The .venv (Python 3.11) has numpy with the correct .cpython-311 .so files.
+    The bind-mounted /usr/lib/python3/dist-packages has picamera2, libcamera, prctl, etc.
+    """
+    # Resolve symlinks so this works with colcon --symlink-install
+    repo_root = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    venv_site = os.path.join(repo_root, '.venv', 'lib', 'python3.11', 'site-packages')
+    sys_pkgs = '/usr/lib/python3/dist-packages'
+    paths = [p for p in [venv_site, sys_pkgs] if os.path.isdir(p)]
+    env = os.environ.copy()
+    env['PYTHONPATH'] = ':'.join(paths)
+    return env
+
+
 class CameraNode(Node):
     def __init__(self):
         super().__init__('camera_node')
@@ -42,6 +58,7 @@ class CameraNode(Node):
             [interpreter, _WORKER, str(self._width), str(self._height)],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            env=_worker_env(),
         )
 
         self._latest_frame = None

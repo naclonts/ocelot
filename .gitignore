@@ -2,3 +2,4 @@
 test_output
 .venv
 .beads
+__pycache__

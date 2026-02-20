@@ -6,6 +6,9 @@ services:
     volumes:
       # Project source — live editing
       - ./:/ws/src/ocelot
+      # Persist colcon build artifacts so rebuilds aren't needed on every container start
+      - ocelot_build:/ws/build
+      - ocelot_install:/ws/install
 
       # Bind-mount host Python packages so picamera2 + libcamera work.
       # Pi OS Bookworm has the right libcamera built for the Pi 5 camera stack.
@@ -16,6 +19,25 @@ services:
       - /usr/lib/python3/dist-packages/pidng:/usr/lib/python3/dist-packages/pidng:ro
       - /usr/lib/python3/dist-packages/piexif:/usr/lib/python3/dist-packages/piexif:ro
       - /usr/lib/python3/dist-packages/simplejpeg:/usr/lib/python3/dist-packages/simplejpeg:ro
+
+      # prctl — required by picamera2's ffmpegoutput module
+      - /usr/lib/python3/dist-packages/prctl.py:/usr/lib/python3/dist-packages/prctl.py:ro
+      - /usr/lib/python3/dist-packages/_prctl.cpython-311-aarch64-linux-gnu.so:/usr/lib/python3/dist-packages/_prctl.cpython-311-aarch64-linux-gnu.so:ro
+
+      # libkms++ — required by pykms (picamera2 DRM preview)
+      - /usr/lib/aarch64-linux-gnu/libkms++.so.0.0.0:/usr/lib/aarch64-linux-gnu/libkms++.so.0.0.0:ro
+      - /usr/lib/aarch64-linux-gnu/libkms++.so.0:/usr/lib/aarch64-linux-gnu/libkms++.so.0:ro
+      - /usr/lib/aarch64-linux-gnu/libkms++util.so.0.0.0:/usr/lib/aarch64-linux-gnu/libkms++util.so.0.0.0:ro
+      - /usr/lib/aarch64-linux-gnu/libkms++util.so.0:/usr/lib/aarch64-linux-gnu/libkms++util.so.0:ro
+
+      # udev database — libcamera's device enumerator uses this to discover media devices
+      - /run/udev:/run/udev:ro
+
+      # libpisp config — required by libcamera's rpi/pisp pipeline on Pi 5
+      - /usr/share/libpisp:/usr/share/libpisp:ro
+
+      # IPA tuning files (imx219.json etc) — required by rpi/pisp and rpi/vc4 pipelines
+      - /usr/share/libcamera:/usr/share/libcamera:ro
 
       # libcamera shared libraries (Pi 5 RP1 camera stack)
       - /usr/lib/aarch64-linux-gnu/libcamera:/usr/lib/aarch64-linux-gnu/libcamera:ro
@@ -41,3 +63,7 @@ services:
       - ROS_LOCALHOST_ONLY=1
     stdin_open: true
     tty: true
+
+volumes:
+  ocelot_build:
+  ocelot_install:

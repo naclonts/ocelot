@@ -12,6 +12,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     i2c-tools \
     && rm -rf /var/lib/apt/lists/*
 
+# Pin setuptools to a version compatible with colcon's --symlink-install
+# (newer setuptools dropped setup.py develop support)
+RUN pip3 install --break-system-packages 'setuptools<74'
+
 # Pi-specific Python packages.
 # picamera2 depends on host libcamera — we bind-mount from the host OS
 # at runtime rather than installing mismatched Ubuntu versions.
@@ -20,18 +24,17 @@ RUN pip3 install --break-system-packages \
     smbus2 \
     lgpio
 
-# Python 3.11 is needed to run capture_worker.py — picamera2's libcamera
-# bindings are compiled for Python 3.11 (Pi OS Bookworm) and cannot load
-# under Python 3.12 (ROS Jazzy / Ubuntu Noble).
+# Python 3.11 for capture_worker.py.
+# picamera2/libcamera bindings on the host (Pi OS Bookworm) are compiled for
+# Python 3.11; the host .venv/lib/python3.11/site-packages is bind-mounted
+# at runtime to provide numpy with the correct .cpython-311 .so files.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     software-properties-common \
     && add-apt-repository ppa:deadsnakes/ppa \
     && apt-get update && apt-get install -y --no-install-recommends \
     python3.11 \
     python3.11-venv \
-    && rm -rf /var/lib/apt/lists/* \
-    && python3.11 -m ensurepip --upgrade \
-    && python3.11 -m pip install --no-cache-dir numpy
+    && rm -rf /var/lib/apt/lists/*
 
 # Workspace setup
 WORKDIR /ws
