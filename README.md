@@ -95,10 +95,6 @@ ocelot/
 └── setup.cfg
 ```
 
-## Known Issues
-
-**Camera in Docker** — `picamera2` / `libcamera` require library versions from Pi OS Bookworm (Python 3.11, Boost 1.74). The container (Ubuntu Noble) has incompatible versions. The subprocess workaround (`capture_worker.py` under `python3.11`) is implemented but numpy is still conflicting between the pip-installed version and the bind-mounted Pi OS version. See `.claude/HANDOFF.md` for debug status.
-
 ## Phase Roadmap
 | Phase | Weeks | Goal |
 |---|---|---|

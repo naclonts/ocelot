@@ -13,7 +13,7 @@ servo_node:
 
 tracker_node:
   ros__parameters:
-    enabled: false       # set true to activate face tracking
+    enabled: true
     kp_pan: 0.3          # proportional gain (velocity per normalized-error unit)
     kp_tilt: 0.3
     deadband: 30         # pixel radius of center dead zone
