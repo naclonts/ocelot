@@ -56,19 +56,35 @@ is only needed when `setup.py` entry points change.
 ### Sim (dev machine)
 
 ```bash
-# One-time: wildcard xauth cookie so the root container can reach the X server
-# Re-run if your display session changes (login/logout, display number changes)
-touch /tmp/.docker.xauth
-xauth nlist $DISPLAY | sed -e 's/^..../ffff/' | xauth -f /tmp/.docker.xauth nmerge -
-
-# Build sim image
+# One-time: build the sim image
 docker compose -f deploy/docker/docker-compose.sim.yml build
 
-# Interactive shell (launch Gazebo manually inside)
-docker compose -f deploy/docker/docker-compose.sim.yml run --rm sim bash
+# Run headless (server only — no GUI, fast, validated path)
+docker compose -f deploy/docker/docker-compose.sim.yml run --rm sim bash -c \
+  "source /opt/ros/jazzy/setup.bash && cd /ws && \
+   colcon build --symlink-install --packages-select ocelot --event-handlers console_direct- && \
+   source /ws/install/setup.bash && \
+   ros2 launch ocelot sim_launch.py headless:=true"
 
-# Inside the container:
-gz sim -v 4 empty.sdf
+# Run with Gazebo GUI (requires one-time xauth setup below)
+docker compose -f deploy/docker/docker-compose.sim.yml run --rm sim bash -c \
+  "source /opt/ros/jazzy/setup.bash && cd /ws && \
+   colcon build --symlink-install --packages-select ocelot --event-handlers console_direct- && \
+   source /ws/install/setup.bash && \
+   ros2 launch ocelot sim_launch.py headless:=false"
+```
+
+The colcon build is fast on repeat runs — named volumes (`sim_build`, `sim_install`) cache artifacts between container invocations.
+
+**One-time xauth setup** (only needed for GUI mode; re-run if the display session changes):
+```bash
+touch /tmp/.docker.xauth
+xauth nlist $DISPLAY | sed -e 's/^..../ffff/' | xauth -f /tmp/.docker.xauth nmerge -
+```
+
+**Interactive shell** (for manual exploration):
+```bash
+docker compose -f deploy/docker/docker-compose.sim.yml run --rm sim bash
 ```
 
 ---
@@ -261,8 +277,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ## Phase Roadmap
 | Phase | Weeks | Goal |
 |---|---|---|
-| 1 | 1–4 | Classical face tracker (Haar cascade) — **current** |
-| 2 | 5–8 | Gazebo sim + synthetic data engine |
+| 1 | 1–4 | Classical face tracker (Haar cascade) — **complete** |
+| 2 | 5–8 | Gazebo sim + synthetic data engine — **current** |
 | 3 | 9–13 | VLA model (DINOv2 + CLIP + action head) |
 | 4 | 14–18 | Edge deployment + MLOps loop |
 | 5 | 19–20 | Polish + portfolio |

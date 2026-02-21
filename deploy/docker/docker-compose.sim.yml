@@ -27,8 +27,16 @@ services:
       - ../../:/ws/src/ocelot           # live source mount
       - sim_build:/ws/build
       - sim_install:/ws/install
-    devices:
-      - /dev/dri:/dev/dri              # GPU/DRI passthrough for hardware rendering
+    # /dev/dri is intentionally not mounted.  When the render node is present,
+    # OGRE2's EGL backend calls eglGetPlatformDisplay(EGL_PLATFORM_DEVICE_EXT,
+    # hw_device) and the hardware gallium driver crashes (segfault in
+    # driCreateNewScreen3) because no GPU kernel module is initialised inside
+    # the container.  Without /dev/dri, eglQueryDevicesEXT() finds no hardware
+    # device, OGRE2 falls back to EGL surfaceless, and Mesa llvmpipe is used
+    # instead.  Re-add the section below only if hardware-accelerated Gazebo
+    # GUI is needed on a properly configured GPU-passthrough host:
+    #   devices:
+    #     - /dev/dri:/dev/dri
     network_mode: host
     # Gazebo Harmonic's OGRE renderer transfers render buffers between its server
     # and GUI processes via shared memory.  Docker's default /dev/shm is 64 MB —

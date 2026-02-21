@@ -9,9 +9,16 @@ setup(
     data_files=[
         ('share/ament_index/resource_index/packages', ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
-        ('share/' + package_name + '/launch', ['launch/tracker_launch.py']),
-        ('share/' + package_name + '/config', ['config/tracker_params.yaml']),
+        ('share/' + package_name + '/launch', [
+            'launch/tracker_launch.py',
+            'launch/sim_launch.py',
+        ]),
+        ('share/' + package_name + '/config', [
+            'config/tracker_params.yaml',
+            'config/controllers.yaml',
+        ]),
         ('share/' + package_name + '/urdf', ['urdf/pan_tilt.urdf']),
+        ('share/' + package_name + '/sim/worlds', ['sim/worlds/tracker_world.sdf']),
     ],
     install_requires=['setuptools'],
     zip_safe=True,

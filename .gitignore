@@ -4,3 +4,9 @@ test_output
 .beads
 __pycache__
 .lgd*
+
+# colcon build artifacts
+build/
+install/
+log/
+*.egg-info/
