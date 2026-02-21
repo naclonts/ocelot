@@ -4,7 +4,7 @@
 
 **When to run**: Phase 1 is complete when the classical tracker reliably follows a face on real hardware and rosbag recording works. Phase 2 starts there.
 
-**Where to run**: Simulation and data generation run on a **development machine** (Ubuntu 24.04 + ROS 2 Jazzy, x86_64 recommended). Gazebo is too resource-intensive for the Pi 5 in headless batch mode. The Pi remains the deployment target only.
+**Where to run**: Simulation and data generation run on a **development machine** (Debian Bookworm x86_64, Docker-based). ROS 2 Jazzy and Gazebo Harmonic run inside a container — no native ROS packages on the host are required. The Pi remains the deployment target only.
 
 ---
 
@@ -30,29 +30,81 @@ When Phase 2 adds a sim image, it lands as `deploy/docker/Dockerfile.sim` — no
 
 ---
 
-## Step 1 — Development Machine Setup
+## Step 1 — Sim Container Setup
 
-Install the Gazebo Harmonic stack on Ubuntu 24.04. This is the officially supported pairing with ROS 2 Jazzy.
+The dev machine is Debian Bookworm (x86_64) — no native ROS 2 Jazzy packages exist for Debian.
+The entire sim stack runs inside a Docker container based on `osrf/ros:jazzy-simulation`, which
+ships Gazebo Harmonic pre-installed. Gazebo's GUI is forwarded to the host via X11.
+
+### 1a — Dockerfile.sim
+
+`deploy/docker/Dockerfile.sim`:
+- Base: `osrf/ros:jazzy-simulation` (Ubuntu 24.04 + ROS 2 Jazzy + Gazebo Harmonic)
+- Add: `ros-jazzy-ros-gz`, `ros-jazzy-gz-ros2-control`, `ros-jazzy-ros2-control`,
+  `ros-jazzy-ros2-controllers`, `ros-jazzy-joint-state-publisher`,
+  `ros-jazzy-robot-state-publisher`, `ros-jazzy-rqt`, `ros-jazzy-rviz2`
+- Add: `python3-pip`, then `pip install dvc h5py`
+- Workspace at `/ws/src/ocelot` (bind-mounted from host)
+- Source ROS + workspace overlay in `/etc/bash.bashrc`
+
+### 1b — docker-compose.sim.yml
+
+`deploy/docker/docker-compose.sim.yml` — separate from the Pi stack, runs on the dev machine:
+
+```yaml
+services:
+  sim:
+    build:
+      context: ../../
+      dockerfile: deploy/docker/Dockerfile.sim
+    environment:
+      - DISPLAY=${DISPLAY}
+      - ROS_DOMAIN_ID=1          # separate domain from real-robot stack
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix  # X11 socket for GUI forwarding
+      - ../../:/ws/src/ocelot           # live source mount
+      - sim_build:/ws/build
+      - sim_install:/ws/install
+    devices:
+      - /dev/dri:/dev/dri              # GPU/DRI passthrough for hardware rendering
+    network_mode: host
+    stdin_open: true
+    tty: true
+
+volumes:
+  sim_build:
+  sim_install:
+```
+
+No VNC, no sidecar — X11 forwarding is the right approach on Linux.
+`ROS_DOMAIN_ID=1` keeps sim topics isolated from the real-robot stack.
+
+### 1c — Host prerequisite (one-time, Debian host)
 
 ```bash
-# Gazebo Harmonic (gz-harmonic) — the ROS 2 Jazzy-compatible simulator
-sudo apt install ros-jazzy-ros-gz ros-jazzy-gz-ros2-control ros-jazzy-ros2-control \
-  ros-jazzy-ros2-controllers ros-jazzy-joint-state-publisher ros-jazzy-robot-state-publisher
+# Allow the container's root user to connect to the host X server
+xhost +local:docker
 
-# DVC for dataset versioning
+# DVC on the host for dataset management (no ROS needed)
 pip install dvc h5py
 ```
 
-**Validation**:
-```bash
-# Gazebo opens and shows an empty world
-ros2 launch ros_gz_sim gz_sim.launch.py gz_args:=empty.sdf
+### Validation
 
-# ROS-Gazebo bridge topics appear
+```bash
+# Build the sim image
+docker compose -f deploy/docker/docker-compose.sim.yml build
+
+# Launch an interactive shell and start Gazebo — GUI window should appear on host
+docker compose -f deploy/docker/docker-compose.sim.yml run --rm sim bash
+# inside container:
+source /opt/ros/jazzy/setup.bash
+ros2 launch ros_gz_sim gz_sim.launch.py gz_args:=empty.sdf &
 ros2 topic list | grep /clock
 ```
 
-**Success gate**: Gazebo launches, `ros2 topic echo /clock` produces output, no errors.
+**Success gate**: Gazebo window appears on the host display, `ros2 topic echo /clock` produces
+output inside the container, no errors.
 
 ---
 
@@ -314,11 +366,18 @@ Target: **50,000–100,000 episodes**. At 10 s × 15 Hz = 150 frames per episode
 
 ### Headless rendering
 
+All of the following runs inside the sim container (no host X server needed for batch runs):
+
 ```bash
-# Gazebo Harmonic headless mode
-ros2 launch ocelot sim_launch.py headless:=true
-# or: GZ_HEADLESS=1, or use Xvfb virtual display
+# Gazebo Harmonic headless — pass GZ_HEADLESS or the launch arg
+docker compose -f deploy/docker/docker-compose.sim.yml run --rm sim \
+  bash -c "source /opt/ros/jazzy/setup.bash && source /ws/install/setup.bash && \
+           ros2 launch ocelot sim_launch.py headless:=true"
+# or set env var inside container: GZ_HEADLESS=1
 ```
+
+For overnight batch runs, omit the `DISPLAY` env var and `/tmp/.X11-unix` volume — the container
+works fully headless without them.
 
 ### Parallelization
 
@@ -417,9 +476,10 @@ ocelot/
 │   └── sim_launch.py           # NEW — simulation launch
 ├── deploy/
 │   └── docker/
-│       ├── Dockerfile.robot    # MOVED from root (was Dockerfile)
-│       ├── Dockerfile.sim      # NEW — sim image for dev machine
-│       └── docker-compose.yml  # MOVED from root
+│       ├── Dockerfile.robot        # MOVED from root (was Dockerfile)
+│       ├── Dockerfile.sim          # NEW — Gazebo sim image (dev machine)
+│       ├── docker-compose.yml      # MOVED from root (Pi robot stack)
+│       └── docker-compose.sim.yml  # NEW — sim stack with X11 forwarding
 ├── dataset/                    # DVC-tracked, gitignored
 │   ├── episodes/
 │   ├── metadata.json
