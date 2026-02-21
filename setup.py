@@ -25,6 +25,7 @@ setup(
             'camera_node = ocelot.camera_node:main',
             'servo_node = ocelot.servo_node:main',
             'tracker_node = ocelot.tracker_node:main',
+            'visualizer_node = ocelot.visualizer_node:main',
         ],
     },
 )

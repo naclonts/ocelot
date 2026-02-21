@@ -19,6 +19,11 @@ def generate_launch_description():
             default_value='false',
             description='Record /camera/image_raw and /cmd_vel to /ws/bags/',
         ),
+        DeclareLaunchArgument(
+            'visualize',
+            default_value='false',
+            description='Run visualizer_node → /camera/image_annotated',
+        ),
 
         Node(
             package='ocelot',
@@ -43,6 +48,14 @@ def generate_launch_description():
             executable='web_video_server',
             name='web_video_server',
             parameters=[{'port': 8080}],
+        ),
+
+        Node(
+            package='ocelot',
+            executable='visualizer_node',
+            name='visualizer_node',
+            parameters=[params],
+            condition=IfCondition(LaunchConfiguration('visualize')),
         ),
 
         ExecuteProcess(

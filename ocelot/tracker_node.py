@@ -18,7 +18,7 @@ import rclpy
 from cv_bridge import CvBridge
 from geometry_msgs.msg import Twist
 from rclpy.node import Node
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image, RegionOfInterest
 
 
 def _find_cascade() -> str:
@@ -64,13 +64,15 @@ class TrackerNode(Node):
             self.get_logger().error(f'Failed to load Haar cascade from {_CASCADE_PATH}')
 
         self.create_subscription(Image, '/camera/image_raw', self._image_cb, 10)
-        self._pub = self.create_publisher(Twist, '/cmd_vel', 10)
+        self._pub     = self.create_publisher(Twist,           '/cmd_vel',           10)
+        self._roi_pub = self.create_publisher(RegionOfInterest, '/tracking/face_roi', 10)
 
         self.get_logger().info('Tracker node started')
 
     def _image_cb(self, msg: Image):
         if not self.get_parameter('enabled').value:
             self._pub.publish(Twist())
+            self._roi_pub.publish(RegionOfInterest())
             return
 
         frame = self._bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
@@ -88,6 +90,7 @@ class TrackerNode(Node):
 
         if len(faces) == 0:
             self._pub.publish(Twist())
+            self._roi_pub.publish(RegionOfInterest())
             return
 
         # Track the largest detected face
@@ -112,6 +115,13 @@ class TrackerNode(Node):
             twist.angular.z = float(np.clip(kp_pan * norm_x, -max_vel, max_vel))
         if abs(error_y) > deadband:
             twist.angular.y = float(np.clip(kp_tilt * norm_y, -max_vel, max_vel))
+
+        roi = RegionOfInterest()
+        roi.x_offset = int(x)
+        roi.y_offset = int(y)
+        roi.width    = int(fw)
+        roi.height   = int(fh)
+        self._roi_pub.publish(roi)
 
         self._pub.publish(twist)
         self.get_logger().debug(

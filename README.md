@@ -11,23 +11,6 @@ Pan-tilt face tracking robot (Raspberry Pi 5). Classical CV baseline with Haar c
 | Servos | SG90 — pan ch0 (0–180°), tilt ch1 (90–180°) |
 | OS | Pi OS Bookworm (Python 3.11) |
 
-## Architecture
-
-```
-camera_node ──/camera/image_raw──▶ tracker_node ──/cmd_vel──▶ servo_node
- (picamera2)   sensor_msgs/Image    (Haar cascade)  Twist       (PCA9685)
-```
-
-Three ROS 2 Jazzy nodes in a single `ament_python` package, running in Docker.
-
-### Nodes
-
-**`camera_node`** — Captures 640×480 RGB frames from Pi Camera V2. Because `libcamera`'s Python bindings are compiled for Python 3.11 (Pi OS Bookworm) and the ROS container uses Python 3.12, capture runs in a `python3.11` subprocess (`capture_worker.py`) communicating frames to the node via a length-prefixed pipe.
-
-**`servo_node`** — Subscribes to `/cmd_vel` (`geometry_msgs/Twist`). Integrates `angular.z` (pan) and `angular.y` (tilt) velocity at 30 Hz into servo positions via `adafruit-circuitpython-servokit`. Centers on shutdown.
-
-**`tracker_node`** — Subscribes to `/camera/image_raw`, runs Haar cascade face detection, publishes proportional velocity commands to `/cmd_vel`. Disabled by default; enable with `ros2 param set /tracker_node enabled true`. Key params: `kp_pan`, `kp_tilt`, `deadband`, `min_neighbors`, `min_face_size`.
-
 ## Quickstart
 
 ### First time
@@ -37,12 +20,11 @@ Three ROS 2 Jazzy nodes in a single `ament_python` package, running in Docker.
 docker compose build
 
 # 2. Create the Python 3.11 venv and build the ROS package (once, or after setup.py changes)
-docker compose run --rm ocelot bash -c "
-  python3.11 -m venv /ws/src/ocelot/.venv &&
+docker compose run --rm ocelot bash -i -c "
+  python3.11 -m venv --without-pip /ws/src/ocelot/.venv &&
+  /ws/src/ocelot/.venv/bin/python3.11 -c \"import urllib.request; exec(urllib.request.urlopen('https://bootstrap.pypa.io/get-pip.py').read())\" &&
   /ws/src/ocelot/.venv/bin/pip install -r /ws/src/ocelot/requirements-worker.txt &&
-  source /opt/ros/jazzy/setup.bash &&
-  cd /ws &&
-  colcon build --packages-select ocelot --symlink-install
+  cd /ws && colcon build --packages-select ocelot --symlink-install
 "
 ```
 
@@ -57,38 +39,90 @@ docker compose run --rm ocelot bash -c "
 ### Launch
 
 ```bash
-docker compose up
+docker compose up                          # tracker only
+VISUALIZE=true docker compose up           # tracker + annotated stream
+RECORD=true docker compose up              # tracker + rosbag recording
+VISUALIZE=true RECORD=true docker compose up  # everything
 ```
 
 Editing Python source files does **not** require a rebuild (symlinks are live). Rebuilding
 is only needed when `setup.py` entry points change.
 
-### View camera stream
+### View streams
 
-```
-http://<pi-ip>:8080/stream?topic=/camera/image_raw
-```
-
-### Enable face tracking
-
-```bash
-ros2 param set /tracker_node enabled true
-```
+| Stream | URL |
+|---|---|
+| Raw | `http://<pi-ip>:8080/stream?topic=/camera/image_raw` |
+| Annotated | `http://<pi-ip>:8080/stream?topic=/camera/image_annotated` |
 
 ## Rosbag
 
-Record `/camera/image_raw` + `/cmd_vel` with zstd compression (bags land in `./bags/`):
+Bags are stored in `./bags/` (bind-mounted to `/ws/bags/` in the container).
+
+### Record
+
+With the stack running (`docker compose up`), open a second terminal and record:
 
 ```bash
-RECORD=true docker compose up
+docker compose exec ocelot bash -i -c "
+  ros2 bag record \
+    --storage mcap \
+    --compression-mode file \
+    --compression-format zstd \
+    -o /ws/bags/my_session \
+    /camera/image_raw /cmd_vel
+"
 ```
 
-Playback or inspect (inside container):
+Ctrl+C to stop recording cleanly. The bag lands in `./bags/my_session/` on the host.
+
+### Playback
+
+Stop the main stack first (avoids topic conflicts with camera_node), then:
 
 ```bash
-ros2 bag play /ws/bags/<bag-dir>
-ros2 bag info /ws/bags/<bag-dir>
+docker compose run --rm ocelot bash -i -c "
+  ros2 run web_video_server web_video_server &
+  ros2 run ocelot visualizer_node &
+  ros2 bag play /ws/bags/my_session --loop
+"
 ```
+
+| Stream | URL |
+|---|---|
+| Raw | `http://<pi-ip>:8080/stream?topic=/camera/image_raw` |
+| Annotated | `http://<pi-ip>:8080/stream?topic=/camera/image_annotated` |
+
+The annotated stream shows face bounding box, center crosshair, error vector, deadband circle, and cmd_vel values.
+
+### Inspect
+
+```bash
+docker compose exec ocelot bash -i -c "ros2 bag info /ws/bags/my_session"
+```
+
+## Architecture
+
+```
+camera_node ──/camera/image_raw──▶ tracker_node ──/cmd_vel──▶ servo_node
+ (picamera2)   sensor_msgs/Image    (Haar cascade)  Twist       (PCA9685)
+                      │
+                      └──▶ visualizer_node ──/camera/image_annotated──▶ web_video_server
+                              (optional)
+```
+
+Three ROS 2 Jazzy nodes in a single `ament_python` package, running in Docker.
+
+### Nodes
+
+**`camera_node`** — Captures 640×480 RGB frames from Pi Camera V2. Because `libcamera`'s Python bindings are compiled for Python 3.11 (Pi OS Bookworm) and the ROS container uses Python 3.12, capture runs in a `python3.11` subprocess (`capture_worker.py`) communicating frames to the node via a length-prefixed pipe.
+
+**`servo_node`** — Subscribes to `/cmd_vel` (`geometry_msgs/Twist`). Integrates `angular.z` (pan) and `angular.y` (tilt) velocity at 30 Hz into servo positions via `adafruit-circuitpython-servokit`. Centers on shutdown.
+
+**`tracker_node`** — Subscribes to `/camera/image_raw`, runs Haar cascade face detection, publishes velocity commands to `/cmd_vel` and bounding box to `/tracking/face_roi`. Key params: `kp_pan`, `kp_tilt`, `deadband`, `min_neighbors`, `min_face_size`.
+
+**`visualizer_node`** — Subscribes to `/camera/image_raw`, `/tracking/face_roi`, and `/cmd_vel`; publishes annotated frames to `/camera/image_annotated`. Optional — launch with `visualize:=true`.
+
 
 ## Validate
 
@@ -115,7 +149,8 @@ ocelot/
 │   ├── camera_node.py       # ROS node (py3.12), spawns capture_worker
 │   ├── capture_worker.py    # picamera2 capture (py3.11 subprocess)
 │   ├── servo_node.py        # PCA9685 servo control
-│   └── tracker_node.py      # Haar cascade proportional controller
+│   ├── tracker_node.py      # Haar cascade proportional controller
+│   └── visualizer_node.py   # Annotated image publisher (optional)
 ├── launch/tracker_launch.py
 ├── config/tracker_params.yaml
 ├── urdf/pan_tilt.urdf
@@ -129,6 +164,38 @@ ocelot/
 ├── setup.py
 └── setup.cfg
 ```
+
+## Troubleshooting
+
+### `haarcascade_frontalface_default.xml not found`
+The apt `python3-opencv` package does not bundle cascade data files. The Dockerfile must install `opencv-python-headless` via pip instead. If you see this after a rebuild, check that `python3-opencv` is absent from the apt section and `opencv-python-headless` is in the pip section.
+
+### `ImportError: libturbojpeg.so.0: cannot open shared object file`
+simplejpeg (required by picamera2's JPEG encoder) needs `libturbojpeg` from the host. Check that `docker-compose.yml` bind-mounts `/usr/lib/aarch64-linux-gnu/libturbojpeg.so.0` from the host.
+
+### `ModuleNotFoundError: No module named 'v4l2'`
+picamera2 imports `v4l2` for sensor mode enumeration. The file lives at `/usr/lib/python3/dist-packages/v4l2.py` on the host and must be bind-mounted into the container. Check `docker-compose.yml`.
+
+### `ensurepip` fails when creating the Python 3.11 venv
+deadsnakes Python 3.11 on Ubuntu 24.04 (Noble) does not bundle the pip wheel used by `ensurepip`. Always create the venv with `--without-pip` and bootstrap pip via `get-pip.py` as shown in the build step above.
+
+### Stale `.venv` from host Python
+If the `.venv` was created by the host's Pi OS Python 3.11 (outside the container), delete it and recreate inside the container:
+```bash
+rm -rf .venv
+# then re-run step 2 of First time setup
+```
+
+### `pip dependency resolver` warning about `pyyaml` / `launch-ros`
+Harmless. pip can see ROS packages in the environment and warns about missing deps for them. The worker venv doesn't need them — ignore it.
+
+### Annotated stream blank / `visualizer_node` missing from `ros2 node list`
+If `VISUALIZE=true docker compose up` starts only 4 nodes (no `visualizer_node`), the colcon install directory is stale. Run a rebuild inside the container then restart:
+```bash
+docker compose run --rm ocelot bash -i -c "cd /ws && colcon build --packages-select ocelot --symlink-install"
+VISUALIZE=true docker compose up
+```
+This is needed whenever a new entry point is added to `setup.py`.
 
 ## Phase Roadmap
 | Phase | Weeks | Goal |

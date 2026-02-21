@@ -10,7 +10,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-jazzy-web-video-server \
     python3-colcon-common-extensions \
     python3-pip \
-    python3-opencv \
     i2c-tools \
     && rm -rf /var/lib/apt/lists/*
 
@@ -21,10 +20,21 @@ RUN pip3 install --break-system-packages 'setuptools<74'
 # Pi-specific Python packages.
 # picamera2 depends on host libcamera — we bind-mount from the host OS
 # at runtime rather than installing mismatched Ubuntu versions.
-RUN pip3 install --break-system-packages \
+#
+# Pi-specific and OpenCV packages.
+#
+# numpy is installed by debian (via ros-jazzy-cv-bridge et al.) without a pip
+# RECORD file, so pip can't uninstall it when opencv-python-headless requires
+# it. Use --ignore-installed to adopt it into pip's registry.
+# Pin numpy<2: cv_bridge (ROS Jazzy) and Pi OS simplejpeg .so are both
+# compiled for numpy 1.x. All packages installed together so the pip resolver
+# sees the numpy<2 constraint and doesn't upgrade it for opencv.
+RUN pip3 install --break-system-packages --ignore-installed \
+    'numpy<2' \
     adafruit-circuitpython-servokit \
     smbus2 \
-    lgpio
+    lgpio \
+    opencv-python-headless
 
 # Python 3.11 for capture_worker.py.
 # picamera2/libcamera bindings on the host (Pi OS Bookworm) are compiled for

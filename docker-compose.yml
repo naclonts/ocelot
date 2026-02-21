@@ -22,6 +22,13 @@ services:
       - /usr/lib/python3/dist-packages/piexif:/usr/lib/python3/dist-packages/piexif:ro
       - /usr/lib/python3/dist-packages/simplejpeg:/usr/lib/python3/dist-packages/simplejpeg:ro
 
+      # libturbojpeg — required by simplejpeg (picamera2 jpeg encoder)
+      - /usr/lib/aarch64-linux-gnu/libturbojpeg.so.0:/usr/lib/aarch64-linux-gnu/libturbojpeg.so.0:ro
+      - /usr/lib/aarch64-linux-gnu/libturbojpeg.so.0.2.0:/usr/lib/aarch64-linux-gnu/libturbojpeg.so.0.2.0:ro
+
+      # v4l2 — required by picamera2 for sensor mode enumeration
+      - /usr/lib/python3/dist-packages/v4l2.py:/usr/lib/python3/dist-packages/v4l2.py:ro
+
       # prctl — required by picamera2's ffmpegoutput module
       - /usr/lib/python3/dist-packages/prctl.py:/usr/lib/python3/dist-packages/prctl.py:ro
       - /usr/lib/python3/dist-packages/_prctl.cpython-311-aarch64-linux-gnu.so:/usr/lib/python3/dist-packages/_prctl.cpython-311-aarch64-linux-gnu.so:ro
@@ -63,11 +70,14 @@ services:
     environment:
       - ROS_DOMAIN_ID=0
       - ROS_LOCALHOST_ONLY=1
-      - RECORD=false
+      - RECORD=${RECORD:-false}
+      - VISUALIZE=${VISUALIZE:-false}
     command: >
       bash -c "source /opt/ros/jazzy/setup.bash &&
-               source /ws/install/setup.bash &&
-               ros2 launch ocelot tracker_launch.py record:=${RECORD:-false}"
+      source /ws/install/setup.bash &&
+      exec ros2 launch ocelot tracker_launch.py
+      record:=${RECORD:-false}
+      visualize:=${VISUALIZE:-false}"
     stdin_open: true
     tty: true
 
