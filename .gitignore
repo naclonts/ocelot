@@ -3,3 +3,4 @@ test_output
 .venv
 .beads
 __pycache__
+.lgd*

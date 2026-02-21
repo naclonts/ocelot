@@ -6,6 +6,8 @@ services:
     volumes:
       # Project source — live editing
       - ./:/ws/src/ocelot
+      # Rosbag recordings — persisted on host
+      - ./bags:/ws/bags
       # Persist colcon build artifacts so rebuilds aren't needed on every container start
       - ocelot_build:/ws/build
       - ocelot_install:/ws/install
@@ -61,6 +63,11 @@ services:
     environment:
       - ROS_DOMAIN_ID=0
       - ROS_LOCALHOST_ONLY=1
+      - RECORD=false
+    command: >
+      bash -c "source /opt/ros/jazzy/setup.bash &&
+               source /ws/install/setup.bash &&
+               ros2 launch ocelot tracker_launch.py record:=${RECORD:-false}"
     stdin_open: true
     tty: true
 

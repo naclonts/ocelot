@@ -42,7 +42,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /ws
 RUN mkdir -p /ws/src
 
-# Source ROS 2 in every shell
-RUN echo "source /opt/ros/jazzy/setup.bash" >> /etc/bash.bashrc
+# Source ROS 2 and the workspace overlay in every interactive shell
+RUN echo "source /opt/ros/jazzy/setup.bash" >> /etc/bash.bashrc && \
+    echo '[[ -f /ws/install/setup.bash ]] && source /ws/install/setup.bash' >> /etc/bash.bashrc
 
 CMD ["bash"]

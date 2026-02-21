@@ -5,9 +5,9 @@ camera_node:
 
 servo_node:
   ros__parameters:
-    velocity_scale: 80.0
+    velocity_scale: 75.0
     pan_center: 90
-    tilt_center: 180
+    tilt_center: 160
     pan_limits: [0, 180]
     tilt_limits: [90, 180]
 

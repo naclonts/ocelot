@@ -103,7 +103,7 @@ class CameraNode(Node):
             frame = self._latest_frame
         if frame is None:
             return
-        msg = self._bridge.cv2_to_imgmsg(frame, encoding='rgb8')
+        msg = self._bridge.cv2_to_imgmsg(frame, encoding='bgr8')
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.header.frame_id = 'camera_link'
         self._pub.publish(msg)

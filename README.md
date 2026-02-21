@@ -57,11 +57,7 @@ docker compose run --rm ocelot bash -c "
 ### Launch
 
 ```bash
-docker compose run --rm ocelot bash -c "
-  source /opt/ros/jazzy/setup.bash &&
-  source /ws/install/setup.bash &&
-  ros2 launch ocelot tracker_launch.py
-"
+docker compose up
 ```
 
 Editing Python source files does **not** require a rebuild (symlinks are live). Rebuilding
@@ -77,6 +73,21 @@ http://<pi-ip>:8080/stream?topic=/camera/image_raw
 
 ```bash
 ros2 param set /tracker_node enabled true
+```
+
+## Rosbag
+
+Record `/camera/image_raw` + `/cmd_vel` with zstd compression (bags land in `./bags/`):
+
+```bash
+RECORD=true docker compose up
+```
+
+Playback or inspect (inside container):
+
+```bash
+ros2 bag play /ws/bags/<bag-dir>
+ros2 bag info /ws/bags/<bag-dir>
 ```
 
 ## Validate
@@ -108,12 +119,10 @@ ocelot/
 ├── launch/tracker_launch.py
 ├── config/tracker_params.yaml
 ├── urdf/pan_tilt.urdf
+├── bags/                    # rosbag recordings (gitignored)
 ├── scripts/                 # bare-metal validation (no ROS needed)
 │   ├── test_servos.py
 │   └── test_tracking_manual.py
-├── docs/
-│   ├── DEV_PLAN.md
-│   └── PHASE1_WEEK2_PLAN.md
 ├── Dockerfile
 ├── docker-compose.yml
 ├── package.xml              # ament_python

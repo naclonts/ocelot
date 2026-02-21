@@ -1,4 +1,7 @@
 from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument, ExecuteProcess
+from launch.conditions import IfCondition
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
 import os
@@ -11,6 +14,12 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        DeclareLaunchArgument(
+            'record',
+            default_value='false',
+            description='Record /camera/image_raw and /cmd_vel to /ws/bags/',
+        ),
+
         Node(
             package='ocelot',
             executable='camera_node',
@@ -34,5 +43,18 @@ def generate_launch_description():
             executable='web_video_server',
             name='web_video_server',
             parameters=[{'port': 8080}],
+        ),
+
+        ExecuteProcess(
+            cmd=[
+                'ros2', 'bag', 'record',
+                '--storage', 'mcap',
+                '--compression-mode', 'file',
+                '--compression-format', 'zstd',
+                '/camera/image_raw',
+                '/cmd_vel',
+            ],
+            cwd='/ws/bags',
+            condition=IfCondition(LaunchConfiguration('record')),
         ),
     ])
