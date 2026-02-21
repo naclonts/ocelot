@@ -1,0 +1,31 @@
+services:
+  sim:
+    build:
+      context: ../../
+      dockerfile: deploy/docker/Dockerfile.sim
+    environment:
+      - DISPLAY=${DISPLAY}
+      # X11 auth cookie — created on the host with the one-time setup command below.
+      # Without this, the container (running as root) is refused by the X server
+      # even when DISPLAY is set, causing Gazebo's Qt GUI to crash on startup.
+      - XAUTHORITY=/tmp/.docker.xauth
+      - ROS_DOMAIN_ID=1          # isolated from real-robot stack (ROS_DOMAIN_ID=0)
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix  # X11 socket for Gazebo GUI forwarding
+      # Wildcard xauth cookie so the container's root user can connect to the host X server.
+      # One-time host setup (re-run if the display session changes):
+      #   touch /tmp/.docker.xauth
+      #   xauth nlist $DISPLAY | sed -e 's/^..../ffff/' | xauth -f /tmp/.docker.xauth nmerge -
+      - /tmp/.docker.xauth:/tmp/.docker.xauth
+      - ../../:/ws/src/ocelot           # live source mount
+      - sim_build:/ws/build
+      - sim_install:/ws/install
+    devices:
+      - /dev/dri:/dev/dri              # GPU/DRI passthrough for hardware rendering
+    network_mode: host
+    stdin_open: true
+    tty: true
+
+volumes:
+  sim_build:
+  sim_install:

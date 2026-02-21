@@ -82,8 +82,11 @@ No VNC, no sidecar — X11 forwarding is the right approach on Linux.
 ### 1c — Host prerequisite (one-time, Debian host)
 
 ```bash
-# Allow the container's root user to connect to the host X server
-xhost +local:docker
+# Create a wildcard X auth cookie so the container's root user can authenticate
+# with the host X server. The sed converts hostname-specific entries to FamilyWild
+# (0xffff) so the cookie works regardless of the container's hostname.
+touch /tmp/.docker.xauth
+xauth nlist $DISPLAY | sed -e 's/^..../ffff/' | xauth -f /tmp/.docker.xauth nmerge -
 
 # DVC on the host for dataset management (no ROS needed)
 pip install dvc h5py
@@ -95,11 +98,18 @@ pip install dvc h5py
 # Build the sim image
 docker compose -f deploy/docker/docker-compose.sim.yml build
 
+# One-time: create the wildcard X auth cookie (re-run if session changes)
+touch /tmp/.docker.xauth
+xauth nlist $DISPLAY | sed -e 's/^..../ffff/' | xauth -f /tmp/.docker.xauth nmerge -
+
 # Launch an interactive shell and start Gazebo — GUI window should appear on host
 docker compose -f deploy/docker/docker-compose.sim.yml run --rm sim bash
 # inside container:
 source /opt/ros/jazzy/setup.bash
-ros2 launch ros_gz_sim gz_sim.launch.py gz_args:=empty.sdf &
+# Launch Gazebo server + clock bridge (gz_sim.launch.py alone does not bridge /clock)
+ros2 launch ros_gz_sim gz_sim.launch.py gz_args:='-r empty.sdf' &
+ros2 run ros_gz_bridge parameter_bridge /clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock &
+sleep 5
 ros2 topic list | grep /clock
 ```
 
