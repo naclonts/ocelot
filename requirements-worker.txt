@@ -1,0 +1,9 @@
+# Python 3.11 dependencies for capture_worker.py
+#
+# capture_worker.py runs under /usr/bin/python3.11 (inside Docker) so that
+# picamera2/libcamera — compiled for Pi OS Bookworm's Python 3.11 — work correctly.
+# picamera2 itself and libcamera are bind-mounted from the host at runtime.
+# This file covers their Python-level deps that aren't in the Docker image.
+numpy
+Pillow
+jsonschema

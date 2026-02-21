@@ -1,6 +1,6 @@
 # Ocelot
 
-Pan-tilt face tracking robot (Raspberry Pi 5). Classical CV baseline in Phase 1; VLA model in later phases.
+Pan-tilt face tracking robot (Raspberry Pi 5). Classical CV baseline with Haar cascade for now; VLA model coming soon.
 
 ## Hardware
 | Component | Detail |
@@ -26,55 +26,37 @@ Three ROS 2 Jazzy nodes in a single `ament_python` package, running in Docker.
 
 **`servo_node`** — Subscribes to `/cmd_vel` (`geometry_msgs/Twist`). Integrates `angular.z` (pan) and `angular.y` (tilt) velocity at 30 Hz into servo positions via `adafruit-circuitpython-servokit`. Centers on shutdown.
 
-**`tracker_node`** — Week 2 placeholder: subscribes to `/camera/image_raw`, publishes zero `Twist` at 10 Hz. Week 3 replaces this with Haar cascade proportional controller.
+**`tracker_node`** — Subscribes to `/camera/image_raw`, runs Haar cascade face detection, publishes proportional velocity commands to `/cmd_vel`. Disabled by default; enable with `ros2 param set /tracker_node enabled true`. Key params: `kp_pan`, `kp_tilt`, `deadband`, `min_neighbors`, `min_face_size`.
 
 ## Quickstart
 
+### First time
+
 ```bash
-# Build image
+# 1. Build Docker image
 docker compose build
 
-# Shell into container
-docker compose run --rm ocelot bash
-
-# Inside container: build package and launch
-source /opt/ros/jazzy/setup.bash
-colcon build --packages-select ocelot --symlink-install
-source install/setup.bash
-ros2 launch ocelot tracker_launch.py
+# 2. Create the Python 3.11 venv and build the ROS package (once, or after setup.py changes)
+docker compose run --rm ocelot bash -c "
+  python3.11 -m venv /ws/src/ocelot/.venv &&
+  /ws/src/ocelot/.venv/bin/pip install -r /ws/src/ocelot/requirements-worker.txt &&
+  source /opt/ros/jazzy/setup.bash &&
+  cd /ws &&
+  colcon build --packages-select ocelot --symlink-install
+"
 ```
 
-## Validate (A3 checklist)
+> **Why the venv?** `capture_worker.py` runs under the container's `python3.11` (deadsnakes)
+> so that picamera2/libcamera — compiled for Pi OS Bookworm's Python 3.11 — work correctly.
+> picamera2 itself is bind-mounted from the host; the venv provides its Python deps
+> (numpy, Pillow, jsonschema) that aren't in the Docker image.
+>
+> **Why `--symlink-install`?** The camera node uses `__file__` to locate the `.venv`.
+> Without symlinks, that path resolves to the install dir instead of the source tree.
+
+### Launch
 
 ```bash
-# I2C — should show 0x40
-i2cdetect -y 1
-
-# Servo quick test
-python3 -c "
-from adafruit_servokit import ServoKit; import time
-k = ServoKit(channels=16)
-k.servo[0].set_pulse_width_range(500, 2500)
-k.servo[0].angle = 45; time.sleep(0.5)
-k.servo[0].angle = 135; time.sleep(0.5)
-k.servo[0].angle = 90; print('OK')
-"
-
-# Manual servo via ROS topic
-ros2 topic pub --once /cmd_vel geometry_msgs/Twist \
-  "{angular: {z: 1.0, y: 0.0}}"
-
-# Confirm topics
-ros2 topic list
-ros2 topic hz /camera/image_raw
-ros2 topic echo /cmd_vel --no-arr
-```
-
-## Running Ocelot with video streaming over web
-
-On Pi:
-
-```sh
 docker compose run --rm ocelot bash -c "
   source /opt/ros/jazzy/setup.bash &&
   source /ws/install/setup.bash &&
@@ -82,10 +64,35 @@ docker compose run --rm ocelot bash -c "
 "
 ```
 
-Then get the Pi's IP and visit in browser to see cam:
+Editing Python source files does **not** require a rebuild (symlinks are live). Rebuilding
+is only needed when `setup.py` entry points change.
 
-```sh
-http://<pi-eth-ip>:8080/stream?topic=/camera/image_raw
+### View camera stream
+
+```
+http://<pi-ip>:8080/stream?topic=/camera/image_raw
+```
+
+### Enable face tracking
+
+```bash
+ros2 param set /tracker_node enabled true
+```
+
+## Validate
+
+```bash
+# I2C — should show 0x40
+i2cdetect -y 1
+
+# Manual servo via ROS topic
+ros2 topic pub --once /cmd_vel geometry_msgs/Twist \
+  "{angular: {z: 1.0, y: 0.0}}"
+
+# Confirm publish rates
+ros2 topic list
+ros2 topic hz /camera/image_raw    # expect ~15 Hz
+ros2 topic echo /cmd_vel --no-arr
 ```
 
 
@@ -97,7 +104,7 @@ ocelot/
 │   ├── camera_node.py       # ROS node (py3.12), spawns capture_worker
 │   ├── capture_worker.py    # picamera2 capture (py3.11 subprocess)
 │   ├── servo_node.py        # PCA9685 servo control
-│   └── tracker_node.py      # placeholder (week 3: Haar cascade)
+│   └── tracker_node.py      # Haar cascade proportional controller
 ├── launch/tracker_launch.py
 ├── config/tracker_params.yaml
 ├── urdf/pan_tilt.urdf

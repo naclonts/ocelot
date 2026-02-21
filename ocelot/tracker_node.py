@@ -55,6 +55,8 @@ class TrackerNode(Node):
         self.declare_parameter('kp_tilt', 0.3)
         self.declare_parameter('deadband', 30)   # pixels
         self.declare_parameter('max_velocity', 2.0)
+        self.declare_parameter('min_neighbors', 3)
+        self.declare_parameter('min_face_size', 40)
 
         self._bridge = CvBridge()
         self._cascade = cv2.CascadeClassifier(_CASCADE_PATH)
@@ -75,11 +77,13 @@ class TrackerNode(Node):
         h, w = frame.shape[:2]
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
+        min_neighbors = self.get_parameter('min_neighbors').value
+        min_face_size = self.get_parameter('min_face_size').value
         faces = self._cascade.detectMultiScale(
             gray,
             scaleFactor=1.1,
-            minNeighbors=5,
-            minSize=(60, 60),
+            minNeighbors=min_neighbors,
+            minSize=(min_face_size, min_face_size),
         )
 
         if len(faces) == 0:
