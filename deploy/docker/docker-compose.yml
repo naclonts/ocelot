@@ -1,0 +1,88 @@
+services:
+  ocelot:
+    build:
+      context: ../../
+      dockerfile: deploy/docker/Dockerfile.robot
+    privileged: true
+    network_mode: host
+    volumes:
+      # Project source — live editing
+      - ../../:/ws/src/ocelot
+      # Rosbag recordings — persisted on host
+      - ../../bags:/ws/bags
+      # Persist colcon build artifacts so rebuilds aren't needed on every container start
+      - ocelot_build:/ws/build
+      - ocelot_install:/ws/install
+
+      # Bind-mount host Python packages so picamera2 + libcamera work.
+      # Pi OS Bookworm has the right libcamera built for the Pi 5 camera stack.
+      # The container's Ubuntu packages would be incompatible.
+      - /usr/lib/python3/dist-packages/picamera2:/usr/lib/python3/dist-packages/picamera2:ro
+      - /usr/lib/python3/dist-packages/libcamera:/usr/lib/python3/dist-packages/libcamera:ro
+      - /usr/lib/python3/dist-packages/pykms:/usr/lib/python3/dist-packages/pykms:ro
+      - /usr/lib/python3/dist-packages/pidng:/usr/lib/python3/dist-packages/pidng:ro
+      - /usr/lib/python3/dist-packages/piexif:/usr/lib/python3/dist-packages/piexif:ro
+      - /usr/lib/python3/dist-packages/simplejpeg:/usr/lib/python3/dist-packages/simplejpeg:ro
+
+      # libturbojpeg — required by simplejpeg (picamera2 jpeg encoder)
+      - /usr/lib/aarch64-linux-gnu/libturbojpeg.so.0:/usr/lib/aarch64-linux-gnu/libturbojpeg.so.0:ro
+      - /usr/lib/aarch64-linux-gnu/libturbojpeg.so.0.2.0:/usr/lib/aarch64-linux-gnu/libturbojpeg.so.0.2.0:ro
+
+      # v4l2 — required by picamera2 for sensor mode enumeration
+      - /usr/lib/python3/dist-packages/v4l2.py:/usr/lib/python3/dist-packages/v4l2.py:ro
+
+      # prctl — required by picamera2's ffmpegoutput module
+      - /usr/lib/python3/dist-packages/prctl.py:/usr/lib/python3/dist-packages/prctl.py:ro
+      - /usr/lib/python3/dist-packages/_prctl.cpython-311-aarch64-linux-gnu.so:/usr/lib/python3/dist-packages/_prctl.cpython-311-aarch64-linux-gnu.so:ro
+
+      # libkms++ — required by pykms (picamera2 DRM preview)
+      - /usr/lib/aarch64-linux-gnu/libkms++.so.0.0.0:/usr/lib/aarch64-linux-gnu/libkms++.so.0.0.0:ro
+      - /usr/lib/aarch64-linux-gnu/libkms++.so.0:/usr/lib/aarch64-linux-gnu/libkms++.so.0:ro
+      - /usr/lib/aarch64-linux-gnu/libkms++util.so.0.0.0:/usr/lib/aarch64-linux-gnu/libkms++util.so.0.0.0:ro
+      - /usr/lib/aarch64-linux-gnu/libkms++util.so.0:/usr/lib/aarch64-linux-gnu/libkms++util.so.0:ro
+
+      # udev database — libcamera's device enumerator uses this to discover media devices
+      - /run/udev:/run/udev:ro
+
+      # libpisp config — required by libcamera's rpi/pisp pipeline on Pi 5
+      - /usr/share/libpisp:/usr/share/libpisp:ro
+
+      # IPA tuning files (imx219.json etc) — required by rpi/pisp and rpi/vc4 pipelines
+      - /usr/share/libcamera:/usr/share/libcamera:ro
+
+      # libcamera shared libraries (Pi 5 RP1 camera stack)
+      - /usr/lib/aarch64-linux-gnu/libcamera:/usr/lib/aarch64-linux-gnu/libcamera:ro
+      - /usr/lib/aarch64-linux-gnu/libcamera.so.0.3:/usr/lib/aarch64-linux-gnu/libcamera.so.0.3:ro
+      - /usr/lib/aarch64-linux-gnu/libcamera.so.0.3.1:/usr/lib/aarch64-linux-gnu/libcamera.so.0.3.1:ro
+      - /usr/lib/aarch64-linux-gnu/libcamera-base.so.0.3:/usr/lib/aarch64-linux-gnu/libcamera-base.so.0.3:ro
+      - /usr/lib/aarch64-linux-gnu/libcamera-base.so.0.3.1:/usr/lib/aarch64-linux-gnu/libcamera-base.so.0.3.1:ro
+      - /usr/lib/aarch64-linux-gnu/libcamera.so:/usr/lib/aarch64-linux-gnu/libcamera.so:ro
+      - /usr/lib/aarch64-linux-gnu/libcamera-base.so:/usr/lib/aarch64-linux-gnu/libcamera-base.so:ro
+
+      # Pi 5 ISP library (required by libcamera on RP1 hardware)
+      - /usr/lib/aarch64-linux-gnu/libpisp.so.1:/usr/lib/aarch64-linux-gnu/libpisp.so.1:ro
+      - /usr/lib/aarch64-linux-gnu/libpisp.so.1.0.7:/usr/lib/aarch64-linux-gnu/libpisp.so.1.0.7:ro
+
+      # Boost 1.74 (Pi OS Bookworm) — Ubuntu Noble has 1.83+, but _libcamera.so needs 1.74
+      - /lib/aarch64-linux-gnu/libboost_filesystem.so.1.74.0:/lib/aarch64-linux-gnu/libboost_filesystem.so.1.74.0:ro
+      - /lib/aarch64-linux-gnu/libboost_log.so.1.74.0:/lib/aarch64-linux-gnu/libboost_log.so.1.74.0:ro
+      - /lib/aarch64-linux-gnu/libboost_log_setup.so.1.74.0:/lib/aarch64-linux-gnu/libboost_log_setup.so.1.74.0:ro
+      - /lib/aarch64-linux-gnu/libboost_thread.so.1.74.0:/lib/aarch64-linux-gnu/libboost_thread.so.1.74.0:ro
+
+    environment:
+      - ROS_DOMAIN_ID=0
+      - ROS_LOCALHOST_ONLY=1
+      - RECORD=${RECORD:-false}
+      - VISUALIZE=${VISUALIZE:-false}
+    command: >
+      bash -c "source /opt/ros/jazzy/setup.bash &&
+      source /ws/install/setup.bash &&
+      exec ros2 launch ocelot tracker_launch.py
+      record:=${RECORD:-false}
+      visualize:=${VISUALIZE:-false}"
+    stdin_open: true
+    tty: true
+
+volumes:
+  ocelot_build:
+  ocelot_install:

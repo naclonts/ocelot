@@ -156,8 +156,10 @@ ocelot/
 ├── scripts/                 # bare-metal validation (no ROS needed)
 │   ├── test_servos.py
 │   └── test_tracking_manual.py
-├── Dockerfile
-├── docker-compose.yml
+├── deploy/docker/
+│   ├── Dockerfile.robot     # robot deployment image (Pi 5)
+│   └── docker-compose.yml   # compose config (relative to deploy/docker/)
+├── docker-compose.yml       # convenience wrapper — includes deploy/docker/
 ├── package.xml              # ament_python
 ├── setup.py
 └── setup.cfg
@@ -169,10 +171,10 @@ ocelot/
 The apt `python3-opencv` package does not bundle cascade data files. The Dockerfile must install `opencv-python-headless` via pip instead. If you see this after a rebuild, check that `python3-opencv` is absent from the apt section and `opencv-python-headless` is in the pip section.
 
 ### `ImportError: libturbojpeg.so.0: cannot open shared object file`
-simplejpeg (required by picamera2's JPEG encoder) needs `libturbojpeg` from the host. Check that `docker-compose.yml` bind-mounts `/usr/lib/aarch64-linux-gnu/libturbojpeg.so.0` from the host.
+simplejpeg (required by picamera2's JPEG encoder) needs `libturbojpeg` from the host. Check that `deploy/docker/docker-compose.yml` bind-mounts `/usr/lib/aarch64-linux-gnu/libturbojpeg.so.0` from the host.
 
 ### `ModuleNotFoundError: No module named 'v4l2'`
-picamera2 imports `v4l2` for sensor mode enumeration. The file lives at `/usr/lib/python3/dist-packages/v4l2.py` on the host and must be bind-mounted into the container. Check `docker-compose.yml`.
+picamera2 imports `v4l2` for sensor mode enumeration. The file lives at `/usr/lib/python3/dist-packages/v4l2.py` on the host and must be bind-mounted into the container. Check `deploy/docker/docker-compose.yml`.
 
 ### `ensurepip` fails when creating the Python 3.11 venv
 deadsnakes Python 3.11 on Ubuntu 24.04 (Noble) does not bundle the pip wheel used by `ensurepip`. Always create the venv with `--without-pip` and bootstrap pip via `get-pip.py` as shown in the build step above.
