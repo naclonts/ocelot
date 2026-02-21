@@ -41,8 +41,6 @@ docker compose run --rm ocelot bash -i -c "
 ```bash
 docker compose up                          # tracker only
 VISUALIZE=true docker compose up           # tracker + annotated stream
-RECORD=true docker compose up              # tracker + rosbag recording
-VISUALIZE=true RECORD=true docker compose up  # everything
 ```
 
 Editing Python source files does **not** require a rebuild (symlinks are live). Rebuilding
