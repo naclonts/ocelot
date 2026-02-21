@@ -10,6 +10,13 @@ services:
       # even when DISPLAY is set, causing Gazebo's Qt GUI to crash on startup.
       - XAUTHORITY=/tmp/.docker.xauth
       - ROS_DOMAIN_ID=1          # isolated from real-robot stack (ROS_DOMAIN_ID=0)
+      # Prevents Qt from using MIT-SHM extension, which fails in containers and
+      # causes rendering artifacts / black windows.
+      - QT_X11_NO_MITSHM=1
+      # Without GZ_IP, Gazebo transport tries multicast discovery on all interfaces.
+      # This stalls the GUI event loop waiting for the server — window appears but
+      # freezes before the scene loads.  Binding to loopback fixes it.
+      - GZ_IP=127.0.0.1
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix  # X11 socket for Gazebo GUI forwarding
       # Wildcard xauth cookie so the container's root user can connect to the host X server.
@@ -23,6 +30,13 @@ services:
     devices:
       - /dev/dri:/dev/dri              # GPU/DRI passthrough for hardware rendering
     network_mode: host
+    # Gazebo Harmonic's OGRE renderer transfers render buffers between its server
+    # and GUI processes via shared memory.  Docker's default /dev/shm is 64 MB —
+    # far too small; Gazebo silently fails to render and shows a black window.
+    shm_size: '2g'
+    # Share the host IPC namespace so the container can access DRI shared memory
+    # objects.  Required for hardware-accelerated rendering via /dev/dri.
+    ipc: host
     stdin_open: true
     tty: true
 

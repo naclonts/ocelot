@@ -53,6 +53,26 @@ is only needed when `setup.py` entry points change.
 | Raw | `http://<pi-ip>:8080/stream?topic=/camera/image_raw` |
 | Annotated | `http://<pi-ip>:8080/stream?topic=/camera/image_annotated` |
 
+### Sim (dev machine)
+
+```bash
+# One-time: wildcard xauth cookie so the root container can reach the X server
+# Re-run if your display session changes (login/logout, display number changes)
+touch /tmp/.docker.xauth
+xauth nlist $DISPLAY | sed -e 's/^..../ffff/' | xauth -f /tmp/.docker.xauth nmerge -
+
+# Build sim image
+docker compose -f deploy/docker/docker-compose.sim.yml build
+
+# Interactive shell (launch Gazebo manually inside)
+docker compose -f deploy/docker/docker-compose.sim.yml run --rm sim bash
+
+# Inside the container:
+gz sim -v 4 empty.sdf
+```
+
+---
+
 ## Rosbag
 
 Bags are stored in `./bags/` (bind-mounted to `/ws/bags/` in the container).
@@ -196,6 +216,47 @@ docker compose run --rm ocelot bash -i -c "cd /ws && colcon build --packages-sel
 VISUALIZE=true docker compose up
 ```
 This is needed whenever a new entry point is added to `setup.py`.
+
+### Sim (Gazebo) — `docker-compose.sim.yml`
+
+#### Gazebo window appears but freezes / not responding
+Root cause: Gazebo transport tries multicast peer discovery on all interfaces when `GZ_IP` is unset. The GUI event loop blocks waiting for the server handshake — the window frame appears (Qt init succeeds) but hangs before the scene loads.
+
+Fix (already in `docker-compose.sim.yml`):
+```yaml
+environment:
+  - GZ_IP=127.0.0.1
+```
+This binds Gazebo transport to loopback only, so server↔GUI discovery resolves instantly.
+
+#### Gazebo window is black / empty world
+Root cause: Docker's default `/dev/shm` is 64 MB — too small for Gazebo's OGRE renderer, which transfers render buffers between server and GUI via shared memory.
+
+Fix (already in `docker-compose.sim.yml`):
+```yaml
+shm_size: '2g'
+ipc: host
+environment:
+  - QT_X11_NO_MITSHM=1
+```
+
+#### X11 auth: container (root) refused by X server
+The container runs as root; `xhost +si:localuser:nathan` won't help. Use a wildcard xauth cookie instead. One-time host setup (re-run if the display session changes):
+```bash
+touch /tmp/.docker.xauth
+xauth nlist $DISPLAY | sed -e 's/^..../ffff/' | xauth -f /tmp/.docker.xauth nmerge -
+```
+The compose file mounts `/tmp/.docker.xauth` and sets `XAUTHORITY=/tmp/.docker.xauth`.
+
+#### `MESA: error: ZINK: vkCreateInstance failed` / software rendering
+The `jazzy-simulation` base image doesn't include Vulkan ICDs, so OGRE falls back to software OpenGL (llvmpipe). The sim works but renders on CPU. To enable GPU acceleration, add to `Dockerfile.sim`:
+```dockerfile
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    mesa-vulkan-drivers \
+    && rm -rf /var/lib/apt/lists/*
+```
+
+---
 
 ## Phase Roadmap
 | Phase | Weeks | Goal |
