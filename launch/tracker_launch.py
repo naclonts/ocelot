@@ -66,6 +66,7 @@ def generate_launch_description():
                 '--compression-format', 'zstd',
                 '/camera/image_raw',
                 '/cmd_vel',
+                '/tracking/face_roi',
             ],
             cwd='/ws/bags',
             condition=IfCondition(LaunchConfiguration('record')),
