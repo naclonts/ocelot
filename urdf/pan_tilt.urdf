@@ -13,9 +13,19 @@
     <limit lower="-1.5708" upper="1.5708" effort="1.0" velocity="1.0"/>
   </joint>
   <link name="pan_link">
+    <inertial>
+      <mass value="0.02"/>
+      <!-- Solid box 0.04 x 0.04 x 0.02 m, m=0.02 kg -->
+      <inertia ixx="3.33e-6" ixy="0" ixz="0"
+                              iyy="3.33e-6" iyz="0"
+                                             izz="5.33e-6"/>
+    </inertial>
     <visual>
       <geometry><box size="0.04 0.04 0.02"/></geometry>
     </visual>
+    <collision>
+      <geometry><box size="0.04 0.04 0.02"/></geometry>
+    </collision>
   </link>
 
   <!-- Tilt: rotates around Y axis (pitch). 90-180° range, 180° = forward. -->
@@ -27,9 +37,19 @@
     <limit lower="0.0" upper="1.5708" effort="1.0" velocity="1.0"/>
   </joint>
   <link name="tilt_link">
+    <inertial>
+      <mass value="0.02"/>
+      <!-- Solid box 0.04 x 0.04 x 0.02 m, m=0.02 kg -->
+      <inertia ixx="3.33e-6" ixy="0" ixz="0"
+                              iyy="3.33e-6" iyz="0"
+                                             izz="5.33e-6"/>
+    </inertial>
     <visual>
       <geometry><box size="0.04 0.04 0.02"/></geometry>
     </visual>
+    <collision>
+      <geometry><box size="0.04 0.04 0.02"/></geometry>
+    </collision>
   </link>
 
   <!-- Camera fixed to tilt bracket -->
@@ -39,9 +59,61 @@
     <origin xyz="0.02 0 0.01" rpy="0 0 0"/>
   </joint>
   <link name="camera_link">
+    <inertial>
+      <mass value="0.01"/>
+      <!-- Solid box 0.025 x 0.024 x 0.009 m, m=0.01 kg -->
+      <inertia ixx="5.48e-7" ixy="0" ixz="0"
+                              iyy="5.88e-7" iyz="0"
+                                             izz="1.00e-6"/>
+    </inertial>
     <visual>
       <geometry><box size="0.025 0.024 0.009"/></geometry>
     </visual>
+    <collision>
+      <geometry><box size="0.025 0.024 0.009"/></geometry>
+    </collision>
   </link>
+
+  <!-- ros2_control hardware interface for Gazebo simulation.
+       GazeboSimSystem is ignored by the real hardware stack. -->
+  <ros2_control name="ocelot_gz" type="system">
+    <hardware>
+      <plugin>gz_ros2_control/GazeboSimSystem</plugin>
+    </hardware>
+    <joint name="pan_joint">
+      <command_interface name="velocity"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="tilt_joint">
+      <command_interface name="velocity"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+  </ros2_control>
+
+  <!-- Gazebo Harmonic camera sensor on camera_link.
+       Publishes to /camera/image_raw at 15 Hz; bridged to ROS in sim_launch.py. -->
+  <gazebo reference="camera_link">
+    <sensor name="camera" type="camera">
+      <camera>
+        <horizontal_fov>1.0472</horizontal_fov>  <!-- 60 deg -->
+        <image>
+          <width>640</width>
+          <height>480</height>
+          <format>R8G8B8</format>
+        </image>
+        <clip>
+          <near>0.01</near>
+          <far>100</far>
+        </clip>
+      </camera>
+      <always_on>true</always_on>
+      <update_rate>15</update_rate>
+      <visualize>true</visualize>
+      <topic>/camera/image_raw</topic>
+      <gz_frame_id>camera_link</gz_frame_id>
+    </sensor>
+  </gazebo>
 
 </robot>
