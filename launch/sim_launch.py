@@ -4,6 +4,7 @@ from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
+    ExecuteProcess,
     IncludeLaunchDescription,
     OpaqueFunction,
     SetEnvironmentVariable,
@@ -131,17 +132,26 @@ def launch_setup(context, *args, **kwargs):
         )],
     )
 
-    # Step 4: wire the existing tracker_node into the sim.
-    # Started disabled (enabled=False override takes priority over the yaml's
-    # enabled=true).  Enable after the world loads:
-    #   ros2 param set /tracker_node enabled true
-    # Uses tracker_params.yaml so kp_pan=-0.8 / kp_tilt=0.8 match real
-    # hardware — no gain re-tuning should be needed in sim (parity check).
+    # tracker_node: enabled from the start via tracker_params.yaml (enabled: true).
+    # The node subscribes to /camera/image_raw; if the bridge isn't up yet it
+    # simply receives no callbacks — no crash, no manual intervention needed.
+    # Uses tracker_params.yaml so kp_pan=-0.8 / kp_tilt=0.8 match real hardware.
     tracker = Node(
         package='ocelot',
         executable='tracker_node',
-        parameters=[tracker_params, {'enabled': False}],
+        parameters=[tracker_params],
         output='screen',
+    )
+
+    # Oscillate the face billboard automatically once the world is stable.
+    # 15 s gives Gazebo time to finish renderer init and spawn the model.
+    # move_face.py runs until the launch is torn down (Ctrl-C kills it).
+    move_face = TimerAction(
+        period=15.0,
+        actions=[ExecuteProcess(
+            cmd=['python3', '/ws/src/ocelot/sim/move_face.py'],
+            output='screen',
+        )],
     )
 
     # Translates /cmd_vel (Twist) → /joint_group_velocity_controller/commands
@@ -152,8 +162,16 @@ def launch_setup(context, *args, **kwargs):
         output='screen',
     )
 
+    # Publishes /camera/image_annotated (bounding box, error vector, cmd_vel overlay).
+    # View with: ros2 run rqt_image_view rqt_image_view → select /camera/image_annotated
+    visualizer = Node(
+        package='ocelot',
+        executable='visualizer_node',
+        output='screen',
+    )
+
     return [set_gz_resource, gz_sim, rsp, spawn_robot, bridge, spawn_jsb,
-            tracker, cmd_vel_adapter]
+            tracker, cmd_vel_adapter, visualizer, move_face]
 
 
 def generate_launch_description():

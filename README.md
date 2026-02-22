@@ -76,15 +76,22 @@ docker compose -f deploy/docker/docker-compose.sim.yml run --rm sim bash -c \
 
 The colcon build is fast on repeat runs — named volumes (`sim_build`, `sim_install`) cache artifacts between container invocations.
 
+After ~15 seconds the sim is fully up: the face billboard starts oscillating in both pan (Y) and tilt (Z), and the tracker follows it automatically. No manual steps needed.
+
 **One-time xauth setup** (only needed for GUI mode; re-run if the display session changes):
 ```bash
 touch /tmp/.docker.xauth
 xauth nlist $DISPLAY | sed -e 's/^..../ffff/' | xauth -f /tmp/.docker.xauth nmerge -
 ```
 
-**Interactive shell** (for manual exploration):
+**Interactive shell** (for exploring topics or running tools manually):
 ```bash
-docker compose -f deploy/docker/docker-compose.sim.yml run --rm sim bash
+docker compose -f deploy/docker/docker-compose.sim.yml exec sim bash
+```
+
+Verify tracking is working from a second shell in the container:
+```bash
+ros2 topic echo /joint_states --field position   # pan/tilt positions should change
 ```
 
 ---
@@ -204,7 +211,7 @@ ocelot/
 ## Troubleshooting
 
 ### `haarcascade_frontalface_default.xml not found`
-The apt `python3-opencv` package does not bundle cascade data files. The Dockerfile must install `opencv-python-headless` via pip instead. If you see this after a rebuild, check that `python3-opencv` is absent from the apt section and `opencv-python-headless` is in the pip section.
+The apt `python3-opencv` package does not bundle cascade data files. `opencv-data` must also be installed — it provides the cascade XMLs at `/usr/share/opencv4/haarcascades/`. This is already in `Dockerfile.sim`. If you see this error after a rebuild, check that both `python3-opencv` and `opencv-data` are present in the apt install section.
 
 ### `ImportError: libturbojpeg.so.0: cannot open shared object file`
 simplejpeg (required by picamera2's JPEG encoder) needs `libturbojpeg` from the host. Check that `deploy/docker/docker-compose.yml` bind-mounts `/usr/lib/aarch64-linux-gnu/libturbojpeg.so.0` from the host.

@@ -30,8 +30,14 @@ RUN pip3 install --break-system-packages dvc h5py
 WORKDIR /ws
 RUN mkdir -p /ws/src
 
-# Source ROS 2 and the workspace overlay in every interactive shell
+# Source ROS 2 and the workspace overlay in every interactive shell.
+# Mesa software rendering vars: required for any Qt/GL app (rqt, rviz2) in the
+# container — no hardware GPU is available, so we force llvmpipe via EGL.
 RUN echo "source /opt/ros/jazzy/setup.bash" >> /etc/bash.bashrc && \
-    echo '[[ -f /ws/install/setup.bash ]] && source /ws/install/setup.bash' >> /etc/bash.bashrc
+    echo '[[ -f /ws/install/setup.bash ]] && source /ws/install/setup.bash' >> /etc/bash.bashrc && \
+    echo 'export LIBGL_ALWAYS_SOFTWARE=1' >> /etc/bash.bashrc && \
+    echo 'export GALLIUM_DRIVER=llvmpipe' >> /etc/bash.bashrc && \
+    echo 'export MESA_LOADER_DRIVER_OVERRIDE=llvmpipe' >> /etc/bash.bashrc && \
+    echo 'export EGL_PLATFORM=surfaceless' >> /etc/bash.bashrc
 
 CMD ["bash"]
