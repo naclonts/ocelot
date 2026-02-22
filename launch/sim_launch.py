@@ -20,7 +20,20 @@ def launch_setup(context, *args, **kwargs):
 
     urdf_path = os.path.join(pkg, 'urdf', 'pan_tilt.urdf')
     controllers_yaml = os.path.join(pkg, 'config', 'controllers.yaml')
+    tracker_params = os.path.join(pkg, 'config', 'tracker_params.yaml')
     world_file = os.path.join(pkg, 'sim', 'worlds', 'tracker_world.sdf')
+
+    # GZ_SIM_RESOURCE_PATH: Gazebo searches these directories for model://
+    # URIs.  The source path is listed first so generated textures (written
+    # by sim/generate_face_texture.py to the bind-mounted source tree) take
+    # priority over any installed copies that may be missing the PNG.
+    source_models = '/ws/src/ocelot/sim/models'           # bind-mount path inside container
+    installed_models = os.path.join(pkg, 'sim', 'models') # colcon install path
+    gz_resource = source_models + ':' + installed_models
+    existing_gz = os.environ.get('GZ_SIM_RESOURCE_PATH', '')
+    if existing_gz:
+        gz_resource = gz_resource + ':' + existing_gz
+    set_gz_resource = SetEnvironmentVariable('GZ_SIM_RESOURCE_PATH', gz_resource)
 
     with open(urdf_path, 'r') as f:
         urdf_content = f.read()
@@ -118,7 +131,29 @@ def launch_setup(context, *args, **kwargs):
         )],
     )
 
-    return [gz_sim, rsp, spawn_robot, bridge, spawn_jsb]
+    # Step 4: wire the existing tracker_node into the sim.
+    # Started disabled (enabled=False override takes priority over the yaml's
+    # enabled=true).  Enable after the world loads:
+    #   ros2 param set /tracker_node enabled true
+    # Uses tracker_params.yaml so kp_pan=-0.8 / kp_tilt=0.8 match real
+    # hardware — no gain re-tuning should be needed in sim (parity check).
+    tracker = Node(
+        package='ocelot',
+        executable='tracker_node',
+        parameters=[tracker_params, {'enabled': False}],
+        output='screen',
+    )
+
+    # Translates /cmd_vel (Twist) → /joint_group_velocity_controller/commands
+    # (Float64MultiArray) so tracker_node drives the simulated joints.
+    cmd_vel_adapter = Node(
+        package='ocelot',
+        executable='cmd_vel_adapter',
+        output='screen',
+    )
+
+    return [set_gz_resource, gz_sim, rsp, spawn_robot, bridge, spawn_jsb,
+            tracker, cmd_vel_adapter]
 
 
 def generate_launch_description():

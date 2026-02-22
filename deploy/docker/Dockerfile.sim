@@ -12,6 +12,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-jazzy-robot-state-publisher \
     ros-jazzy-rqt \
     ros-jazzy-rviz2 \
+    # cv_bridge + python3-opencv: required by tracker_node (Step 4 parity check)
+    # and by sim/generate_face_texture.py (numpy + cv2 face texture generation).
+    # libopencv-data: provides haarcascade_frontalface_default.xml at
+    # /usr/share/opencv4/haarcascades/ (NOT pulled in by python3-opencv itself).
+    ros-jazzy-cv-bridge \
+    python3-opencv \
+    libopencv-data \
     python3-colcon-common-extensions \
     python3-pip \
     xauth \

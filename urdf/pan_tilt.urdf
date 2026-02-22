@@ -28,13 +28,16 @@
     </collision>
   </link>
 
-  <!-- Tilt: rotates around Y axis (pitch). 90-180° range, 180° = forward. -->
+  <!-- Tilt: rotates around Y axis (pitch). ±90° range.
+       Positive rotation = nose-down (camera tilts toward -Z).
+       Negative rotation = nose-up  (camera tilts toward +Z).
+       Symmetric range lets the tracker chase faces above or below axis. -->
   <joint name="tilt_joint" type="revolute">
     <parent link="pan_link"/>
     <child link="tilt_link"/>
     <origin xyz="0 0 0.03" rpy="0 0 0"/>
     <axis xyz="0 1 0"/>
-    <limit lower="0.0" upper="1.5708" effort="1.0" velocity="1.0"/>
+    <limit lower="-1.5708" upper="1.5708" effort="1.0" velocity="1.0"/>
   </joint>
   <link name="tilt_link">
     <inertial>

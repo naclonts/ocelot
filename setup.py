@@ -19,6 +19,10 @@ setup(
         ]),
         ('share/' + package_name + '/urdf', ['urdf/pan_tilt.urdf']),
         ('share/' + package_name + '/sim/worlds', ['sim/worlds/tracker_world.sdf']),
+        ('share/' + package_name + '/sim/models/face_billboard', [
+            'sim/models/face_billboard/model.config',
+            'sim/models/face_billboard/model.sdf',
+        ]),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -32,6 +36,7 @@ setup(
             'camera_node = ocelot.camera_node:main',
             'servo_node = ocelot.servo_node:main',
             'tracker_node = ocelot.tracker_node:main',
+            'cmd_vel_adapter = ocelot.cmd_vel_adapter:main',
             'visualizer_node = ocelot.visualizer_node:main',
         ],
     },

@@ -73,9 +73,28 @@
       </link>
     </model>
 
-    <!-- Face billboard models are spawned/despawned programmatically by
-         the scenario generator (Step 6). The world starts empty so the
-         oracle and data-collection scripts control what appears here. -->
+    <!-- ── Step 4 parity check: static face billboard ──────────────────
+         Positioned 2 m in front of the camera (x=2), 0.3 m to the right
+         (y=0.3) and 0.5 m high (z=0.5).  At 2 m with 640×480 / 60° FOV
+         the 0.3×0.3 m billboard renders as ~76 px — within Haar's range.
+
+         The billboard appears right-of-centre in the image → tracker_node
+         produces positive angular.z → cmd_vel_adapter sends positive
+         pan_joint velocity → pan rotates counterclockwise (camera left).
+         With kp_pan=-0.8 (tracker_params.yaml) angular.z is NEGATIVE →
+         pan_joint velocity negative → camera turns right → face centres. ✓
+
+         model:// URI requires GZ_SIM_RESOURCE_PATH to include the parent
+         of face_billboard/ (sim_launch.py sets GZ_SIM_RESOURCE_PATH).
+
+         For Step 6 (scenario generator), additional face models are
+         spawned/despawned dynamically via gz service calls; this static
+         one can be removed or left as a background reference object. -->
+    <include>
+      <name>face_0</name>
+      <uri>model://face_billboard</uri>
+      <pose>2.0 0.3 0.5 0 0 0</pose>
+    </include>
 
   </world>
 </sdf>

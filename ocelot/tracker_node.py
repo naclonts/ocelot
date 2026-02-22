@@ -33,13 +33,22 @@ def _find_cascade() -> str:
         p = os.path.join(d, 'cv2', 'data', name)
         if os.path.exists(p):
             return p
+    # Ubuntu/Debian system install via libopencv-data (apt python3-opencv)
+    for d in [
+        '/usr/share/opencv4/haarcascades',
+        '/usr/share/opencv4',
+        '/usr/local/share/opencv4/haarcascades',
+    ]:
+        p = os.path.join(d, name)
+        if os.path.exists(p):
+            return p
     # Fall back to the project .venv (bind-mounted in Docker at /ws/src/ocelot)
     repo_root = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
     matches = glob.glob(os.path.join(repo_root, '.venv', '**', name), recursive=True)
     if matches:
         return matches[0]
     raise FileNotFoundError(
-        f'{name} not found. Run: pip3 install opencv-python-headless'
+        f'{name} not found. Install libopencv-data or run: pip3 install opencv-python-headless'
     )
 
 
