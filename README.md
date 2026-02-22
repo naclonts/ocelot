@@ -59,7 +59,7 @@ is only needed when `setup.py` entry points change.
 # One-time: build the sim image
 docker compose -f deploy/docker/docker-compose.sim.yml build
 
-# Run headless (server only — no GUI, fast, validated path)
+# Run headless (server only — no GUI; fast)
 docker compose -f deploy/docker/docker-compose.sim.yml run --rm sim bash -c \
   "source /opt/ros/jazzy/setup.bash && cd /ws && \
    colcon build --symlink-install --packages-select ocelot --event-handlers console_direct- && \

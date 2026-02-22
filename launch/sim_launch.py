@@ -170,8 +170,25 @@ def launch_setup(context, *args, **kwargs):
         output='screen',
     )
 
-    return [set_gz_resource, gz_sim, rsp, spawn_robot, bridge, spawn_jsb,
-            tracker, cmd_vel_adapter, visualizer, move_face]
+    actions = [set_gz_resource, gz_sim, rsp, spawn_robot, bridge, spawn_jsb,
+               tracker, cmd_vel_adapter, visualizer, move_face]
+
+    # Open rqt_image_view to monitor the annotated camera feed.
+    # Runs in both headless and GUI modes — in headless mode this is the only
+    # visual; in GUI mode it appears alongside Gazebo.  Skipped only when
+    # DISPLAY is unset (fully headless server with no X11 forwarding).
+    if os.environ.get('DISPLAY'):
+        actions.append(TimerAction(
+            period=8.0,
+            actions=[Node(
+                package='rqt_image_view',
+                executable='rqt_image_view',
+                arguments=['/camera/image_annotated'],
+                output='screen',
+            )],
+        ))
+
+    return actions
 
 
 def generate_launch_description():

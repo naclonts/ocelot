@@ -21,22 +21,25 @@ import argparse
 import math
 import subprocess
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 
 WORLD = 'tracker_world'
 MODEL = 'face_0'
 X = 2.0           # fixed distance in front of robot (metres)
 
+# Each gz service call blocks until the response arrives.  Running it in a
+# thread pool keeps the 20 Hz main loop non-blocking while still keeping the
+# ZMQ endpoint alive long enough for Gazebo to deliver the reply.  Without
+# this, Popen() exits before Gazebo responds → "Host unreachable" errors.
+_pool = ThreadPoolExecutor(max_workers=4)
+
 
 def set_pose(x: float, y: float, z: float) -> None:
-    """Fire-and-forget gz service call — don't block on the response.
-
-    subprocess.run() blocks until gz responds (up to --timeout ms), causing
-    irregular update intervals and jerky motion.  Popen() returns immediately;
-    the gz process runs in the background and exits on its own.
-    """
+    """Submit a gz service call to the thread pool (non-blocking)."""
     req = f'name: "{MODEL}" position: {{x: {x:.4f}, y: {y:.4f}, z: {z:.4f}}}'
-    subprocess.Popen(
+    _pool.submit(
+        subprocess.run,
         [
             'gz', 'service',
             '-s', f'/world/{WORLD}/set_pose',
@@ -67,7 +70,7 @@ def main() -> None:
     print('Press Ctrl-C to stop.')
 
     t0 = time.monotonic()
-    hz = 20.0         # 20 Hz — non-blocking Popen keeps this sustainable
+    hz = 20.0         # 20 Hz — thread pool keeps the main loop non-blocking
     dt = 1.0 / hz
 
     try:
