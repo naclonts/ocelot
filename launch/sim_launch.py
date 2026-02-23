@@ -192,22 +192,12 @@ def launch_setup(context, *args, **kwargs):
 
 
 def generate_launch_description():
+    # Rendering env vars (LIBGL_ALWAYS_SOFTWARE, GALLIUM_DRIVER, etc.) are
+    # set by the docker-compose files, not here.  docker-compose.sim.yml sets
+    # software-renderer defaults; docker-compose.sim.gpu.yml overrides them to
+    # empty/0 for NVIDIA GPU mode.  Setting them here would re-override the
+    # GPU compose values and re-trigger the Mesa EGL / gallium segfault.
     return LaunchDescription([
-        # Force Mesa software renderer (llvmpipe) so the Sensors plugin can
-        # initialize EGL in the container without a hardware GPU.
-        # LIBGL_ALWAYS_SOFTWARE=1 alone is insufficient: Mesa EGL prints
-        # "Not allowed to force software rendering when API explicitly selects
-        # a hardware device" and is ignored when OGRE2's GL3Plus backend calls
-        # eglGetPlatformDisplay(EGL_PLATFORM_DEVICE_EXT, hw_device).
-        # The hardware DRI device is excluded via docker-compose (no /dev/dri
-        # mount), which forces eglQueryDevicesEXT() to return only software
-        # devices.  The env vars below then direct Mesa to use llvmpipe for
-        # EGL surfaceless rendering.
-        SetEnvironmentVariable('LIBGL_ALWAYS_SOFTWARE', '1'),
-        SetEnvironmentVariable('GALLIUM_DRIVER', 'llvmpipe'),
-        SetEnvironmentVariable('MESA_LOADER_DRIVER_OVERRIDE', 'llvmpipe'),
-        SetEnvironmentVariable('EGL_PLATFORM', 'surfaceless'),
-
         DeclareLaunchArgument(
             'headless',
             default_value='false',

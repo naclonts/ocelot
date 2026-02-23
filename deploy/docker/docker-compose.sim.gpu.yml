@@ -31,12 +31,19 @@ services:
       - MESA_LOADER_DRIVER_OVERRIDE=
       - EGL_PLATFORM=
       # NVIDIA container runtime capabilities.
+      # 'display' is intentionally omitted: it causes nvidia-container-cli to
+      # mount /dev/dri DRM nodes inside the container.  Mesa EGL then finds
+      # those nodes via eglQueryDevicesEXT() and tries to initialise the gallium
+      # DRI driver, which segfaults (no GPU kernel module in the container).
+      # X11 forwarding works without 'display' — the container is an X11 client
+      # connecting to the host X server via the /tmp/.X11-unix socket; DRM
+      # master access is handled by the host X server, not the container.
       - NVIDIA_VISIBLE_DEVICES=all
-      - NVIDIA_DRIVER_CAPABILITIES=graphics,display,utility,compute
+      - NVIDIA_DRIVER_CAPABILITIES=graphics,utility,compute
     deploy:
       resources:
         reservations:
           devices:
             - driver: nvidia
               count: all
-              capabilities: [gpu, graphics, display, utility, compute]
+              capabilities: [gpu, graphics, utility, compute]
