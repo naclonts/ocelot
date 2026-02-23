@@ -121,11 +121,10 @@ def launch_setup(context, *args, **kwargs):
     # initialization (EGL/Mesa can take several seconds in containers).
     # The spawner executables will still wait for controller_manager on
     # their own, so this just avoids a race against the render-loop startup.
-    # gz_ros2_control auto-loads and activates joint_group_velocity_controller
-    # from the parameters yaml as soon as the GazeboSimSystem hardware is ready
-    # (≈2 s after startup).  Spawning it again would fail with "cannot configure
-    # from 'active' state".  Only joint_state_broadcaster needs an explicit
-    # spawner because gz_ros2_control does NOT auto-activate it.
+    # gz_ros2_control does NOT auto-load controllers — both must be spawned
+    # explicitly.  If update_rate in controllers.yaml exceeds the Gazebo physics
+    # rate, gz_ros2_control logs an ERROR and returns early without loading any
+    # controllers (tracker_world.sdf step=0.02 s → 50 Hz max; yaml = 50 Hz).
     spawn_jsb = TimerAction(
         period=12.0,
         actions=[Node(

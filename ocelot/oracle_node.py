@@ -62,10 +62,10 @@ class OracleNode(Node):
         super().__init__('oracle_node')
 
         self.declare_parameter('enabled', False)
-        self.declare_parameter('kp_pan', 1.0)        # rad/s per radian of pan error
-        self.declare_parameter('kp_tilt', 1.0)       # rad/s per radian of tilt error
+        self.declare_parameter('kp_pan', 10.0)       # rad/s per radian of pan error
+        self.declare_parameter('kp_tilt', 5.0)       # rad/s per radian of tilt error
         self.declare_parameter('max_velocity', 2.0)  # rad/s clamp
-        self.declare_parameter('deadband_rad', 0.02) # ~1.1° — ignore tiny errors
+        self.declare_parameter('deadband_rad', 0.002) # ~0.11° — suppress sub-pixel chatter
 
         self._pan_angle: float = 0.0
         self._tilt_angle: float = 0.0
