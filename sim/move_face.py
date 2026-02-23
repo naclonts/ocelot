@@ -5,6 +5,15 @@ Y oscillates sinusoidally at the given period; Z oscillates at 1.7× the period
 (incommensurate, so the path doesn't repeat quickly) with a smaller amplitude.
 This exercises both pan and tilt joints continuously.
 
+Uses gz.transport13 Python API directly (no subprocesses) so the ZMQ node
+stays alive for the lifetime of the script.  Ephemeral gz service subprocesses
+trigger gz-transport's BYE/cleanup protocol on exit, causing Gazebo to log
+'NodeShared::RecvSrvRequest() error sending response: Host unreachable' on
+every call.  A persistent Node avoids that entirely.
+
+Requires: python3-gz-transport13  python3-gz-msgs10
+  (both in deploy/docker/Dockerfile.sim — rebuild image if missing)
+
 Usage (inside the sim container, after the sim is running):
     python3 sim/move_face.py
 
@@ -19,38 +28,47 @@ The world name is tracker_world (must match the world name in tracker_world.sdf)
 
 import argparse
 import math
-import subprocess
+import sys
 import time
-from concurrent.futures import ThreadPoolExecutor
+
+try:
+    from gz.transport13 import Node
+    from gz.msgs10.pose_pb2 import Pose
+    from gz.msgs10.boolean_pb2 import Boolean
+except ImportError as exc:
+    sys.exit(
+        f'gz-transport Python bindings not available: {exc}\n'
+        'Fix: add python3-gz-transport13 and python3-gz-msgs10 to\n'
+        '     deploy/docker/Dockerfile.sim and rebuild the image.'
+    )
 
 
 WORLD = 'tracker_world'
 MODEL = 'face_0'
 X = 2.0           # fixed distance in front of robot (metres)
+SERVICE = f'/world/{WORLD}/set_pose'
 
-# Each gz service call blocks until the response arrives.  Running it in a
-# thread pool keeps the 20 Hz main loop non-blocking while still keeping the
-# ZMQ endpoint alive long enough for Gazebo to deliver the reply.  Without
-# this, Popen() exits before Gazebo responds → "Host unreachable" errors.
-_pool = ThreadPoolExecutor(max_workers=4)
+# Single persistent node — ZMQ connection stays open, no per-call teardown.
+_node = Node()
+
+_last_result: bool = True   # track to avoid spamming warnings
 
 
 def set_pose(x: float, y: float, z: float) -> None:
-    """Submit a gz service call to the thread pool (non-blocking)."""
-    req = f'name: "{MODEL}" position: {{x: {x:.4f}, y: {y:.4f}, z: {z:.4f}}}'
-    _pool.submit(
-        subprocess.run,
-        [
-            'gz', 'service',
-            '-s', f'/world/{WORLD}/set_pose',
-            '--reqtype', 'gz.msgs.Pose',
-            '--reptype', 'gz.msgs.Boolean',
-            '--timeout', '200',
-            '--req', req,
-        ],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    """Call the Gazebo set_pose service via the persistent gz-transport node."""
+    global _last_result
+    req = Pose()
+    req.name = MODEL
+    req.position.x = x
+    req.position.y = y
+    req.position.z = z
+    result, _rep = _node.request(SERVICE, req, Pose, Boolean, 500)
+    if result != _last_result:
+        if result:
+            print(f'\n[move_face] service OK — pose updates resuming')
+        else:
+            print(f'\n[move_face] WARNING: {SERVICE} returned False (timeout or service unreachable)')
+        _last_result = result
 
 
 def main() -> None:
@@ -67,10 +85,18 @@ def main() -> None:
 
     print(f'Moving {MODEL} in world {WORLD}: '
           f'Y amp={args.amp} m, Z amp={args.z_amp} m, period={args.period} s')
+    print(f'Service: {SERVICE}')
     print('Press Ctrl-C to stop.')
 
+    # Probe: list available services and warn if ours is absent.
+    services = _node.service_list()
+    if SERVICE not in services:
+        print(f'[move_face] WARNING: {SERVICE!r} not in service list.')
+        print(f'  Available services: {services if services else "(none — gz transport not connected?)"}')
+        print('  Is the sim running? Will keep trying...')
+
     t0 = time.monotonic()
-    hz = 20.0         # 20 Hz — thread pool keeps the main loop non-blocking
+    hz = 10.0
     dt = 1.0 / hz
 
     try:
@@ -86,7 +112,6 @@ def main() -> None:
         print('\nStopped.')
         # Park face at a slightly off-centre position so tracker stays active
         set_pose(X, 0.3, args.z)
-
 
 
 if __name__ == '__main__':

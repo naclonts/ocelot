@@ -56,38 +56,17 @@ is only needed when `setup.py` entry points change.
 ### Sim (dev machine)
 
 ```bash
-# One-time: build the sim image
-docker compose -f deploy/docker/docker-compose.sim.yml build
-
-# Run headless (server only — no GUI; fast)
-docker compose -f deploy/docker/docker-compose.sim.yml run --rm sim bash -c \
-  "source /opt/ros/jazzy/setup.bash && cd /ws && \
-   colcon build --symlink-install --packages-select ocelot --event-handlers console_direct- && \
-   source /ws/install/setup.bash && \
-   ros2 launch ocelot sim_launch.py headless:=true"
-
-# Run with Gazebo GUI (requires one-time xauth setup below)
-docker compose -f deploy/docker/docker-compose.sim.yml run --rm sim bash -c \
-  "source /opt/ros/jazzy/setup.bash && cd /ws && \
-   colcon build --symlink-install --packages-select ocelot --event-handlers console_direct- && \
-   source /ws/install/setup.bash && \
-   ros2 launch ocelot sim_launch.py headless:=false"
+make sim-build   # build the sim image (once, or after Dockerfile changes)
+make sim         # headless — no GUI, fast, works on any machine
+make sim-gui     # Gazebo GUI — software rendering (no GPU required)
+make sim-gpu     # Gazebo GUI — GPU accelerated (requires NVIDIA runtime)
+make sim-xauth   # one-time X11 auth setup (re-run if display session changes)
+make sim-shell   # interactive shell in a fresh sim container
 ```
 
 The colcon build is fast on repeat runs — named volumes (`sim_build`, `sim_install`) cache artifacts between container invocations.
 
 After ~15 seconds the sim is fully up: the face billboard starts oscillating in both pan (Y) and tilt (Z), and the tracker follows it automatically. No manual steps needed.
-
-**One-time xauth setup** (only needed for GUI mode; re-run if the display session changes):
-```bash
-touch /tmp/.docker.xauth
-xauth nlist $DISPLAY | sed -e 's/^..../ffff/' | xauth -f /tmp/.docker.xauth nmerge -
-```
-
-**Interactive shell** (for exploring topics or running tools manually):
-```bash
-docker compose -f deploy/docker/docker-compose.sim.yml exec sim bash
-```
 
 Verify tracking is working from a second shell in the container:
 ```bash
@@ -264,20 +243,12 @@ environment:
 ```
 
 #### X11 auth: container (root) refused by X server
-The container runs as root; `xhost +si:localuser:nathan` won't help. Use a wildcard xauth cookie instead. One-time host setup (re-run if the display session changes):
-```bash
-touch /tmp/.docker.xauth
-xauth nlist $DISPLAY | sed -e 's/^..../ffff/' | xauth -f /tmp/.docker.xauth nmerge -
-```
-The compose file mounts `/tmp/.docker.xauth` and sets `XAUTHORITY=/tmp/.docker.xauth`.
+The container runs as root; `xhost +si:localuser:nathan` won't help. Use a wildcard xauth cookie instead. Run `make sim-xauth` once (re-run if the display session changes). The compose file mounts `/tmp/.docker.xauth` and sets `XAUTHORITY=/tmp/.docker.xauth`.
 
 #### `MESA: error: ZINK: vkCreateInstance failed` / software rendering
-The `jazzy-simulation` base image doesn't include Vulkan ICDs, so OGRE falls back to software OpenGL (llvmpipe). The sim works but renders on CPU. To enable GPU acceleration, add to `Dockerfile.sim`:
-```dockerfile
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    mesa-vulkan-drivers \
-    && rm -rf /var/lib/apt/lists/*
-```
+The `jazzy-simulation` base image doesn't include Vulkan ICDs, so OGRE logs this and falls back to software OpenGL (llvmpipe). This is expected and harmless when running without the GPU overlay — the sim works but renders on CPU.
+
+To switch to GPU-accelerated rendering (NVIDIA), use the GPU compose overlay as described in the [Sim section](#sim-dev-machine) above.
 
 ---
 

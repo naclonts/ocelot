@@ -1,0 +1,42 @@
+# GPU-accelerated overlay for the sim service.
+#
+# Requires the NVIDIA container runtime on the host:
+#   https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
+#
+# Usage (layer on top of the base sim compose file):
+#   docker compose -f deploy/docker/docker-compose.sim.yml \
+#                  -f deploy/docker/docker-compose.sim.gpu.yml \
+#                  run --rm sim bash -c "..."
+#
+# What this file does:
+#   1. Disables the software-rendering env vars set in docker-compose.sim.yml.
+#   2. Passes NVIDIA_VISIBLE_DEVICES / NVIDIA_DRIVER_CAPABILITIES so the runtime
+#      injects libEGL_nvidia.so and libGLX_nvidia.so into the container.
+#   3. Reserves the NVIDIA GPU via the Docker Compose device reservation API.
+#
+# Note: /dev/dri is intentionally NOT passed through.  The original crash
+# (segfault in driCreateNewScreen3 / libgallium) was caused by Mesa's gallium
+# DRI driver trying to open a DRI render node.  NVIDIA does not use /dev/dri —
+# it renders through /dev/nvidia* which the container runtime provides.
+# Without /dev/dri, Mesa EGL finds no hardware DRI device and is bypassed;
+# OGRE2's EGL device enumeration picks the NVIDIA EGL device instead.
+
+services:
+  sim:
+    environment:
+      # Disable software rendering overrides from the base file.
+      # Mesa 24.x (Ubuntu Noble) treats LIBGL_ALWAYS_SOFTWARE=0 as "disabled".
+      - LIBGL_ALWAYS_SOFTWARE=0
+      - GALLIUM_DRIVER=
+      - MESA_LOADER_DRIVER_OVERRIDE=
+      - EGL_PLATFORM=
+      # NVIDIA container runtime capabilities.
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=graphics,display,utility,compute
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu, graphics, display, utility, compute]

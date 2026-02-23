@@ -98,7 +98,8 @@
   <!-- Gazebo Harmonic camera sensor on camera_link.
        Publishes to /camera/image_raw at 5 Hz; bridged to ROS in sim_launch.py.
        Lower rate than real hardware (15 Hz) to reduce llvmpipe software-render
-       cost in the sim container — each frame is a full OGRE2 render pass. -->
+       cost in the sim container — each frame is a full OGRE2 render pass.
+       10 Hz is a good balance: smooth enough to track, light enough for CPU. -->
   <gazebo reference="camera_link">
     <sensor name="camera" type="camera">
       <camera>
@@ -114,7 +115,7 @@
         </clip>
       </camera>
       <always_on>true</always_on>
-      <update_rate>5</update_rate>
+      <update_rate>10</update_rate>
       <visualize>true</visualize>
       <topic>/camera/image_raw</topic>
       <gz_frame_id>camera_link</gz_frame_id>
