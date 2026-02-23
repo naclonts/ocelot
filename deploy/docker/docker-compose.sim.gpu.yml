@@ -23,6 +23,10 @@
 
 services:
   sim:
+    runtime: nvidia   # Required: nvidia-container-runtime wraps runc and injects
+                      # libEGL_nvidia.so / libGLX_nvidia.so.  Without this, Docker
+                      # uses plain runc even with deploy.resources.reservations.devices,
+                      # passing /dev/nvidia* but never mounting the NVIDIA libraries.
     environment:
       # Disable software rendering overrides from the base file.
       # Mesa 24.x (Ubuntu Noble) treats LIBGL_ALWAYS_SOFTWARE=0 as "disabled".
@@ -40,6 +44,13 @@ services:
       # master access is handled by the host X server, not the container.
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=graphics,utility,compute
+    volumes:
+      # libnvidia-glsi.so is a dependency of libEGL_nvidia.so.0 (needed for OGRE2
+      # GPU rendering).  nvidia-container-cli omits it because it lives in the
+      # top-level /usr/lib/x86_64-linux-gnu/ rather than nvidia/current/, which
+      # is the only subdirectory the toolkit scans for the 'graphics' capability.
+      # NVIDIA_DRIVER_VERSION is exported by the Makefile from `nvidia-smi`.
+      - /usr/lib/x86_64-linux-gnu/libnvidia-glsi.so.${NVIDIA_DRIVER_VERSION}:/usr/lib/x86_64-linux-gnu/nvidia/current/libnvidia-glsi.so.${NVIDIA_DRIVER_VERSION}:ro
     deploy:
       resources:
         reservations:

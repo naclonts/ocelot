@@ -1,6 +1,13 @@
 SIM_COMPOSE     = deploy/docker/docker-compose.sim.yml
 SIM_GPU_COMPOSE = deploy/docker/docker-compose.sim.gpu.yml
 
+# Detect installed NVIDIA driver version so the GPU compose file can bind-mount
+# libnvidia-glsi.so.<version> — a dep of libEGL_nvidia.so.0 that nvidia-container-cli
+# omits from its mounts because it lives in /usr/lib/x86_64-linux-gnu/ (top-level)
+# rather than the nvidia/current/ subdirectory the toolkit scans.
+NVIDIA_DRIVER_VERSION := $(shell nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -1 | tr -d ' \n')
+export NVIDIA_DRIVER_VERSION
+
 # Inner command run inside the sim container for all launch targets
 define SIM_CMD
 source /opt/ros/jazzy/setup.bash && cd /ws && \

@@ -18,6 +18,7 @@ from launch_ros.actions import Node
 def launch_setup(context, *args, **kwargs):
     pkg = get_package_share_directory('ocelot')
     headless = LaunchConfiguration('headless').perform(context)
+    use_oracle = LaunchConfiguration('use_oracle').perform(context) == 'true'
 
     urdf_path = os.path.join(pkg, 'urdf', 'pan_tilt.urdf')
     controllers_yaml = os.path.join(pkg, 'config', 'controllers.yaml')
@@ -100,15 +101,18 @@ def launch_setup(context, *args, **kwargs):
         output='screen',
     )
 
-    # Bridge Gazebo → ROS for simulation-time clock and camera image.
+    # Bridge Gazebo → ROS for simulation-time clock, camera image, and face pose.
     # joint_state_broadcaster publishes /joint_states directly to ROS via
     # ros2_control — no additional bridge is needed for that topic.
+    # /model/face_0/pose: published by the PosePublisher plugin in model.sdf;
+    # gives oracle_node the ground-truth world position of the face billboard.
     bridge = Node(
         package='ros_gz_bridge',
         executable='parameter_bridge',
         arguments=[
             '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock',
             '/camera/image_raw@sensor_msgs/msg/Image[gz.msgs.Image',
+            '/model/face_0/pose@geometry_msgs/msg/Pose[gz.msgs.Pose',
         ],
         output='screen',
     )
@@ -127,21 +131,31 @@ def launch_setup(context, *args, **kwargs):
         actions=[Node(
             package='controller_manager',
             executable='spawner',
-            arguments=['joint_state_broadcaster'],
+            arguments=['joint_state_broadcaster', 'joint_group_velocity_controller'],
             output='screen',
         )],
     )
 
-    # tracker_node: enabled from the start via tracker_params.yaml (enabled: true).
-    # The node subscribes to /camera/image_raw; if the bridge isn't up yet it
-    # simply receives no callbacks — no crash, no manual intervention needed.
-    # Uses tracker_params.yaml so kp_pan=-0.8 / kp_tilt=0.8 match real hardware.
-    tracker = Node(
-        package='ocelot',
-        executable='tracker_node',
-        parameters=[tracker_params],
-        output='screen',
-    )
+    # cmd_vel publisher — mutually exclusive:
+    #   use_oracle=false (default): tracker_node (Haar cascade, Phase 1 behaviour)
+    #   use_oracle=true:            oracle_node  (privileged ground-truth FK, Step 5)
+    # Only one node runs at a time to avoid conflicting /cmd_vel writes.
+    # tracker_node publishes Twist() zeros when disabled, which would zero out
+    # oracle commands — so we simply don't launch the other node.
+    if use_oracle:
+        cmd_vel_node = Node(
+            package='ocelot',
+            executable='oracle_node',
+            parameters=[{'enabled': True}],
+            output='screen',
+        )
+    else:
+        cmd_vel_node = Node(
+            package='ocelot',
+            executable='tracker_node',
+            parameters=[tracker_params],
+            output='screen',
+        )
 
     # Oscillate the face billboard automatically once the world is stable.
     # 15 s gives Gazebo time to finish renderer init and spawn the model.
@@ -171,7 +185,7 @@ def launch_setup(context, *args, **kwargs):
     )
 
     actions = [set_gz_resource, gz_sim, rsp, spawn_robot, bridge, spawn_jsb,
-               tracker, cmd_vel_adapter, visualizer, move_face]
+               cmd_vel_node, cmd_vel_adapter, visualizer, move_face]
 
     # Open rqt_image_view to monitor the annotated camera feed.
     # Runs in both headless and GUI modes — in headless mode this is the only
@@ -202,6 +216,14 @@ def generate_launch_description():
             'headless',
             default_value='false',
             description='Run Gazebo in server-only mode (no GUI). Passes -s to gz_args.',
+        ),
+        DeclareLaunchArgument(
+            'use_oracle',
+            default_value='false',
+            description=(
+                'Use oracle_node (privileged FK tracker) instead of tracker_node '
+                '(Haar cascade). Only one /cmd_vel publisher runs at a time.'
+            ),
         ),
         OpaqueFunction(function=launch_setup),
     ])

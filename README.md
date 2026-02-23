@@ -73,6 +73,25 @@ Verify tracking is working from a second shell in the container:
 ros2 topic echo /joint_states --field position   # pan/tilt positions should change
 ```
 
+#### Oracle mode
+
+The oracle uses ground-truth face pose from Gazebo (no camera/detector) to drive the joints via closed-form FK. Use it instead of the Haar cascade tracker:
+
+```bash
+make sim-shell   # or: docker compose -f deploy/docker/docker-compose.sim.yml run --rm sim bash
+
+# Inside container — terminal 1
+colcon build --symlink-install --packages-select ocelot
+ros2 launch ocelot sim_launch.py use_oracle:=true headless:=true
+```
+
+Measure tracking error in a second shell in the same container:
+```bash
+ros2 run ocelot oracle_validator
+```
+
+Every 10 seconds the validator prints mean/std/p95/max pixel error from image center, and whether the < 5 px success gate passes. Ctrl-C prints a final summary over the full run.
+
 ---
 
 ## Rosbag
@@ -170,6 +189,8 @@ ocelot/
 │   ├── capture_worker.py    # picamera2 capture (py3.11 subprocess)
 │   ├── servo_node.py        # PCA9685 servo control
 │   ├── tracker_node.py      # Haar cascade proportional controller
+│   ├── oracle_node.py       # Privileged ground-truth FK tracker (sim only)
+│   ├── oracle_validator.py  # Pixel-error measurement for oracle validation
 │   └── visualizer_node.py   # Annotated image publisher (optional)
 ├── launch/tracker_launch.py
 ├── config/tracker_params.yaml

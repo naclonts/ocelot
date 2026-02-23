@@ -1,6 +1,6 @@
 controller_manager:
   ros__parameters:
-    update_rate: 100  # Hz — matches physics step (1 ms = 1000 Hz max, 100 is safe)
+    update_rate: 50   # Hz — must not exceed gazebo physics rate (tracker_world: 0.02 s step = 50 Hz)
 
     joint_state_broadcaster:
       type: joint_state_broadcaster/JointStateBroadcaster
