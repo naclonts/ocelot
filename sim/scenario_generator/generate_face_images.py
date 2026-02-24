@@ -221,10 +221,11 @@ def main():
         print(f"  quality : {args.quality}  size: {args.size}")
         print()
         for face in subset:
-            out_path = out_dir / f"{face['face_id']}.png"
-            status = "EXISTS" if out_path.exists() else "to generate"
-            clean = _sanitize_prompt(face["prompt"])
-            print(f"  [{face['face_id']}] {status}")
+            out_path   = out_dir / f"{face['face_id']}.png"
+            face_size  = "1024x1536" if face.get("crop_level") == "waist_up" else args.size
+            status     = "EXISTS" if out_path.exists() else "to generate"
+            clean      = _sanitize_prompt(face["prompt"])
+            print(f"  [{face['face_id']}] {face_size}  {status}")
             print(f"    prompt: {clean[:120]}{'...' if len(clean) > 120 else ''}")
         return
 
@@ -255,13 +256,15 @@ def main():
     failed = []
 
     print(f"Generating {total} face image(s) → {out_dir}")
-    print(f"  quality={args.quality}  size={args.size}  delay={args.delay}s")
+    print(f"  quality={args.quality}  size={args.size} (waist_up→1024x1536)  delay={args.delay}s")
     print()
 
     for idx, face in enumerate(subset, start=1):
-        face_id  = face["face_id"]
-        prompt   = face["prompt"]
-        out_path = out_dir / f"{face_id}.png"
+        face_id    = face["face_id"]
+        prompt     = face["prompt"]
+        crop_level = face.get("crop_level", "")
+        size       = "1024x1536" if crop_level == "waist_up" else args.size
+        out_path   = out_dir / f"{face_id}.png"
 
         prefix = f"[{idx:>{len(str(total))}}/{total}] {face_id}"
 
@@ -270,13 +273,13 @@ def main():
             skipped += 1
             continue
 
-        print(f"{prefix}  generating...", end="", flush=True)
+        print(f"{prefix} [{size}]  generating...", end="", flush=True)
         t0 = time.monotonic()
 
         try:
             png_bytes = _generate_one(
                 client, face_id, prompt,
-                size=args.size, quality=args.quality,
+                size=size, quality=args.quality,
             )
         except Exception as exc:
             print(f"\n  ERROR: {exc}")

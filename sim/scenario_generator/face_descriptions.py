@@ -141,9 +141,9 @@ _ACCESSORY = [
 # never a reliable cue the policy can latch onto.
 # Weights give: waist_up 50%, chest_up 30%, neck_up 20%.
 _CROP_LEVEL = [
-    ("neck_up",   "tight headshot, showing face and neck only",                          2),
+    ("neck_up",   "portrait from the neck up",                                           2),
     ("chest_up",  "upper body portrait showing face, neck, shoulders, and upper chest",  3),
-    ("waist_up",  "half-body portrait, from head to waist, showing full torso",          5),
+    ("waist_up",  "half-body portrait showing full figure from crown to hips, entire torso and both arms visible down to the waist", 5),
 ]
 
 # ---------------------------------------------------------------------------
@@ -238,6 +238,7 @@ def _build_prompt(attrs: dict) -> str:
     crop_desc = attrs.get("crop_level_display", "upper body portrait showing face, neck, shoulders, and upper chest")
     parts.append(
         f"facing the camera, photorealistic, {crop_desc}, "
+        f"complete head fully in frame with crown and top of hair visible, "
         f"soft professional lighting, high resolution"
     )
 
@@ -399,13 +400,6 @@ def main():
     with open(json_path, "w") as f:
         json.dump([asdict(face) for face in faces], f, indent=2)
     print(f"Wrote {len(faces)} face descriptions → {json_path}")
-
-    # Also write a plain-text prompts file for quick review / copy-paste
-    txt_path = out_dir / "prompts.txt"
-    with open(txt_path, "w") as f:
-        for face in faces:
-            f.write(f"[{face.face_id}] {face.prompt}\n")
-    print(f"Wrote prompts → {txt_path}")
 
     # Print summary
     print()
