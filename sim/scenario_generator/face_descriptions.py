@@ -51,7 +51,7 @@ _SKIN_TONE = [
 
 # hair_length: None means bald (handled separately)
 _HAIR_LENGTH = [
-    (None,      None,            1),   # bald
+    (None,      None,            0.47),  # bald ≈ 5% of shots
     ("cropped", "very short",    2),
     ("short",   "short",         3),
     ("medium",  "medium-length", 2),
@@ -94,7 +94,7 @@ _HAT = [
     ("beanie",       "a beanie",              1),
     ("fedora",       "a fedora",              1),
     ("wide_brim",    "a wide-brimmed sun hat",1),
-    ("pirate_hat",   "a pirate hat",          1),
+    ("pirate_hat",   "a pirate hat",          0.12),  # ≈ 1 in 100 shots
     ("cowboy_hat",   "a cowboy hat",          1),
 ]
 
@@ -132,9 +132,9 @@ _SHIRT_COLOR = [
 
 # Over-clothing accessories — None = nothing (higher weight)
 _ACCESSORY = [
-    (None,                   None,                   5),
-    ("over_ear_headphones",  "over-ear headphones",  1),
-    ("scarf",                "a scarf",              1),
+    (None,                   None,                   5    ),
+    ("over_ear_headphones",  "over-ear headphones",  0.1  ),  # ≈ 1 in 50 shots
+    ("scarf",                "a scarf",              0.167),  # ≈ 1 in 30 shots
 ]
 
 # How much of the body is visible.  Randomized so the bottom cutoff line is
