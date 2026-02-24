@@ -16,7 +16,7 @@ source /ws/install/setup.bash && \
 ros2 launch ocelot sim_launch.py headless:=$(HEADLESS)
 endef
 
-.PHONY: sim-build sim sim-gui sim-gpu sim-shell sim-xauth help
+.PHONY: sim-build sim sim-gui sim-gpu sim-shell sim-xauth faces dvc-push dvc-pull help
 
 help:
 	@grep -E '^##' Makefile | sed 's/## //'
@@ -48,5 +48,20 @@ sim-shell:
 sim-xauth:
 	touch /tmp/.docker.xauth
 	xauth nlist $$DISPLAY | sed -e 's/^..../ffff/' | xauth -f /tmp/.docker.xauth nmerge -
+
+## faces      generate face descriptions + images, then track with DVC and push to S3
+faces:
+	python3 sim/scenario_generator/face_descriptions.py --count 80 --seed 42 --out sim/faces/
+	python3 sim/scenario_generator/generate_face_images.py --input sim/faces/face_descriptions.json --out sim/faces/
+	dvc add sim/faces/
+	dvc push
+
+## dvc-push   push all DVC-tracked data to S3
+dvc-push:
+	dvc push
+
+## dvc-pull   fetch all DVC-tracked data from S3
+dvc-pull:
+	dvc pull
 
 .DEFAULT_GOAL := help

@@ -41,7 +41,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Data pipeline dependencies
-RUN pip3 install --break-system-packages dvc h5py
+RUN pip3 install --break-system-packages h5py
 
 # Workspace setup
 WORKDIR /ws

@@ -111,6 +111,7 @@ _GLASSES = [
 _EXPRESSION = [
     ("neutral",       "a neutral expression",  3),
     ("slight_smile",  "a slight smile",        2),
+    ("big_grin",      "a big grin",            1),
     ("serious",       "a serious expression",  1),
 ]
 

@@ -11,3 +11,7 @@ install/
 log/
 *.egg-info/
 .env
+
+# DVC-tracked data (use dvc pull to fetch)
+sim/faces/*.png
+sim/scenario_generator/data/
