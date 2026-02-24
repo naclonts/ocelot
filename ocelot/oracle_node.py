@@ -50,11 +50,11 @@ def _rz(theta: float) -> np.ndarray:
 
 
 def _ry(theta: float) -> np.ndarray:
-    """Rotation matrix around Y axis (tilt joint). Positive = nose-down."""
+    """Rotation matrix around Y axis (tilt joint)."""
     c, s = np.cos(theta), np.sin(theta)
-    return np.array([[ c, 0.0, -s],
+    return np.array([[ c, 0.0, s],
                      [0.0, 1.0, 0.0],
-                     [s, 0.0, c]])
+                     [-s, 0.0, c]])
 
 
 class OracleNode(Node):
