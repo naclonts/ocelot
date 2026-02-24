@@ -51,7 +51,7 @@ sim-xauth:
 
 ## faces      generate face descriptions + images, then track with DVC and push to S3
 faces:
-	python3 sim/scenario_generator/face_descriptions.py --count 80 --seed 42 --out sim/faces/
+	python3 sim/scenario_generator/face_descriptions.py --count 100 --seed 7 --out sim/faces/
 	python3 sim/scenario_generator/generate_face_images.py --input sim/faces/face_descriptions.json --out sim/faces/
 	dvc add sim/faces/
 	dvc push

@@ -13,8 +13,12 @@ Usage (as a module):
     faces = generate_face_descriptions(count=80, seed=42)
 
 Usage (as a script):
-    python3 -m sim.scenario_generator.face_descriptions --count 80 --out sim/faces/
-    python3 sim/scenario_generator/face_descriptions.py --count 80 --out sim/faces/
+    python3 -m sim.scenario_generator.face_descriptions --count 100 --out sim/faces/
+    python3 sim/scenario_generator/face_descriptions.py --count 100 --out sim/faces/
+
+Dataset convention:
+    The canonical dataset uses --seed 7.  To extend the dataset with more faces,
+    increase --count and keep --seed 7 so existing IDs remain stable.
 """
 
 import argparse
