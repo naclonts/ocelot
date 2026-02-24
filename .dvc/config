@@ -1,0 +1,4 @@
+[core]
+    remote = s3_store
+['remote "s3_store"']
+    url = s3://ocelot-vla-data/ocelot
