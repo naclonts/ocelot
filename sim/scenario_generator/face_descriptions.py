@@ -93,7 +93,7 @@ _HAT = [
     ("baseball_cap", "a baseball cap",        2),
     ("beanie",       "a beanie",              1),
     ("fedora",       "a fedora",              1),
-    ("wide_brim",    "a wide-brimmed hat",    1),
+    ("wide_brim",    "a wide-brimmed sun hat",1),
     ("pirate_hat",   "a pirate hat",          1),
     ("cowboy_hat",   "a cowboy hat",          1),
 ]
@@ -114,12 +114,35 @@ _EXPRESSION = [
     ("serious",       "a serious expression",  1),
 ]
 
+# Shirt type and color — only used in prompts for chest_up / waist_up shots
+_SHIRT_TYPE = [
+    ("t_shirt",  "t-shirt", 2),
+    ("hoodie",   "hoodie",  1),
+    ("sweater",  "sweater", 1),
+]
+
+_SHIRT_COLOR = [
+    ("red",   "red",   1),
+    ("blue",  "blue",  1),
+    ("green", "green", 1),
+    ("black", "black", 1),
+    ("white", "white", 1),
+]
+
+# Over-clothing accessories — None = nothing (higher weight)
+_ACCESSORY = [
+    (None,                   None,                   5),
+    ("over_ear_headphones",  "over-ear headphones",  1),
+    ("scarf",                "a scarf",              1),
+]
+
 # How much of the body is visible.  Randomized so the bottom cutoff line is
 # never a reliable cue the policy can latch onto.
+# Weights give: waist_up 50%, chest_up 30%, neck_up 20%.
 _CROP_LEVEL = [
-    ("neck_up",      "tight headshot, showing face and neck only",                         1),
-    ("shoulders_up", "portrait showing face, neck, and shoulders",                         1),
-    ("chest_up",     "upper body portrait showing face, neck, shoulders, and upper chest", 1),
+    ("neck_up",   "tight headshot, showing face and neck only",                          2),
+    ("chest_up",  "upper body portrait showing face, neck, shoulders, and upper chest",  3),
+    ("waist_up",  "half-body portrait, from head to waist, showing full torso",          5),
 ]
 
 # ---------------------------------------------------------------------------
@@ -151,10 +174,13 @@ class FaceDescription:
     facial_hair:  Optional[str]   # None → clean-shaven / N/A for women
     hat:          Optional[str]   # None → no hat
     glasses:      Optional[str]   # None → no glasses
+    accessory:    Optional[str]   # None → none; over_ear_headphones | scarf
+    # clothing — None when crop_level is neck_up
+    shirt:        Optional[str]   # None when not visible; e.g. "red t-shirt"
     # affect
     expression:   str
     # composition — randomized so bottom cutoff is never a consistent cue
-    crop_level:   str             # neck_up | shoulders_up | chest_up
+    crop_level:   str             # neck_up | chest_up | waist_up
     # derived
     prompt:       str             # ready-to-use image-gen prompt
 
@@ -196,11 +222,19 @@ def _build_prompt(attrs: dict) -> str:
     if attrs.get("glasses_display"):
         parts.append(f"wearing {attrs['glasses_display']}")
 
+    # Shirt (only included for chest_up / waist_up)
+    if attrs.get("shirt_display"):
+        parts.append(f"wearing a {attrs['shirt_display']}")
+
+    # Over-clothing accessory
+    if attrs.get("accessory_display"):
+        parts.append(f"wearing {attrs['accessory_display']}")
+
     # Expression
     parts.append(f"with {attrs['expression_display']}")
 
     # Quality / composition suffix — crop_level controls how much body is visible
-    crop_desc = attrs.get("crop_level_display", "portrait showing face, neck, and shoulders")
+    crop_desc = attrs.get("crop_level_display", "upper body portrait showing face, neck, shoulders, and upper chest")
     parts.append(
         f"facing the camera, photorealistic, {crop_desc}, "
         f"soft professional lighting, high resolution"
@@ -274,6 +308,9 @@ def generate_face_descriptions(
         gl = _weighted_choice(rng, _GLASSES)
         glasses_key, glasses_disp = gl[0], gl[1]
 
+        acc = _weighted_choice(rng, _ACCESSORY)
+        accessory_key, accessory_disp = acc[0], acc[1]
+
         # Expression
         expr = _weighted_choice(rng, _EXPRESSION)
         expr_key, expr_disp = expr[0], expr[1]
@@ -281,6 +318,14 @@ def generate_face_descriptions(
         # Crop level — randomized so bottom cutoff is never a consistent cue
         crop = _weighted_choice(rng, _CROP_LEVEL)
         crop_key, crop_disp = crop[0], crop[1]
+
+        # Shirt — always sampled, but only shown in prompt for chest_up / waist_up
+        st = _weighted_choice(rng, _SHIRT_TYPE)
+        shirt_type_key, shirt_type_disp = st[0], st[1]
+        sc = _weighted_choice(rng, _SHIRT_COLOR)
+        shirt_color_key, shirt_color_disp = sc[0], sc[1]
+        shirt_key  = f"{shirt_color_key}_{shirt_type_key}"
+        shirt_disp = f"{shirt_color_disp} {shirt_type_disp}" if crop_key != "neck_up" else None
 
         # Build prompt
         prompt_attrs = dict(
@@ -293,6 +338,8 @@ def generate_face_descriptions(
             facial_hair_display = facial_hair_disp,
             hat_display         = hat_disp,
             glasses_display     = glasses_disp,
+            accessory_display   = accessory_disp,
+            shirt_display       = shirt_disp,
             expression_display  = expr_disp,
             crop_level_display  = crop_disp,
         )
@@ -309,6 +356,8 @@ def generate_face_descriptions(
             facial_hair  = facial_hair_key,
             hat          = hat_key,
             glasses      = glasses_key,
+            accessory    = accessory_key,
+            shirt        = shirt_key if crop_key != "neck_up" else None,
             expression   = expr_key,
             crop_level   = crop_key,
             prompt       = prompt,
@@ -361,7 +410,7 @@ def main():
     print()
     print("=== Attribute coverage ===")
     from collections import Counter
-    attrs_to_check = ["gender", "age_range", "skin_tone", "crop_level", "hat", "glasses", "facial_hair"]
+    attrs_to_check = ["gender", "age_range", "skin_tone", "crop_level", "hat", "glasses", "facial_hair", "accessory", "shirt"]
     for attr in attrs_to_check:
         counts = Counter(getattr(f, attr) for f in faces)
         print(f"  {attr}:")
