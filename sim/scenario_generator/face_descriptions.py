@@ -105,12 +105,21 @@ _GLASSES = [
     ("round",       "round glasses",          1),
     ("rectangular", "rectangular glasses",    2),
     ("thick_rimmed","thick-rimmed glasses",   1),
+    ("sunglasses",  "dark sunglasses",        1),
 ]
 
 _EXPRESSION = [
     ("neutral",       "a neutral expression",  3),
     ("slight_smile",  "a slight smile",        2),
     ("serious",       "a serious expression",  1),
+]
+
+# How much of the body is visible.  Randomized so the bottom cutoff line is
+# never a reliable cue the policy can latch onto.
+_CROP_LEVEL = [
+    ("neck_up",      "tight headshot, showing face and neck only",                         1),
+    ("shoulders_up", "portrait showing face, neck, and shoulders",                         1),
+    ("chest_up",     "upper body portrait showing face, neck, shoulders, and upper chest", 1),
 ]
 
 # ---------------------------------------------------------------------------
@@ -144,6 +153,8 @@ class FaceDescription:
     glasses:      Optional[str]   # None → no glasses
     # affect
     expression:   str
+    # composition — randomized so bottom cutoff is never a consistent cue
+    crop_level:   str             # neck_up | shoulders_up | chest_up
     # derived
     prompt:       str             # ready-to-use image-gen prompt
 
@@ -188,11 +199,11 @@ def _build_prompt(attrs: dict) -> str:
     # Expression
     parts.append(f"with {attrs['expression_display']}")
 
-    # Quality / composition suffix
+    # Quality / composition suffix — crop_level controls how much body is visible
+    crop_desc = attrs.get("crop_level_display", "portrait showing face, neck, and shoulders")
     parts.append(
-        "facing the camera, plain neutral gray background, "
-        "photorealistic, frontal headshot, soft professional lighting, "
-        "high resolution"
+        f"facing the camera, photorealistic, {crop_desc}, "
+        f"soft professional lighting, high resolution"
     )
 
     return ", ".join(parts)
@@ -267,11 +278,15 @@ def generate_face_descriptions(
         expr = _weighted_choice(rng, _EXPRESSION)
         expr_key, expr_disp = expr[0], expr[1]
 
+        # Crop level — randomized so bottom cutoff is never a consistent cue
+        crop = _weighted_choice(rng, _CROP_LEVEL)
+        crop_key, crop_disp = crop[0], crop[1]
+
         # Build prompt
         prompt_attrs = dict(
-            gender            = gender_key,
-            age_display       = age_disp,
-            skin_display      = skin_disp,
+            gender              = gender_key,
+            age_display         = age_disp,
+            skin_display        = skin_disp,
             hair_length_display = hair_len_disp,
             hair_color_display  = hair_color_disp,
             hair_style_display  = hair_style_disp,
@@ -279,6 +294,7 @@ def generate_face_descriptions(
             hat_display         = hat_disp,
             glasses_display     = glasses_disp,
             expression_display  = expr_disp,
+            crop_level_display  = crop_disp,
         )
         prompt = _build_prompt(prompt_attrs)
 
@@ -294,6 +310,7 @@ def generate_face_descriptions(
             hat          = hat_key,
             glasses      = glasses_key,
             expression   = expr_key,
+            crop_level   = crop_key,
             prompt       = prompt,
         ))
 
@@ -344,7 +361,7 @@ def main():
     print()
     print("=== Attribute coverage ===")
     from collections import Counter
-    attrs_to_check = ["gender", "age_range", "skin_tone", "hat", "glasses", "facial_hair"]
+    attrs_to_check = ["gender", "age_range", "skin_tone", "crop_level", "hat", "glasses", "facial_hair"]
     for attr in attrs_to_check:
         counts = Counter(getattr(f, attr) for f in faces)
         print(f"  {attr}:")

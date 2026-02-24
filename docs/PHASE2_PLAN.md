@@ -276,6 +276,7 @@ This is exact inverse kinematics for a 2-DOF serial mechanism — closed-form, n
 | Lighting | ambient intensity | [0.2–0.8] |
 | Background | wall color | random RGB in [0.3–0.9] each channel |
 | Background | wall texture | uniform sample from background textures library |
+| Background | moving distractors | 0–2 non-face moving objects (colored sphere/box, slow random walk); prevents VLA learning "track anything that moves" |
 | Camera | Gaussian noise σ | [0.0–0.015] |
 | Camera | brightness offset | [−20–+20] pixel value |
 
@@ -296,12 +297,46 @@ Labels are generated **deterministically** from scenario parameters — no human
 
 Start with 4–6 label types. Add more in Phase 3 once the model trains.
 
+### Face texture pipeline (Step 6a — do before scenario generator)
+
+1. **Generate descriptions**: `python3 sim/scenario_generator/face_descriptions.py --count 80 --out sim/faces/`
+   - Produces `sim/faces/face_descriptions.json` (attributes + AI prompt per face)
+   - `crop_level` attribute is randomized per-face (`neck_up` / `shoulders_up` / `chest_up`) so the
+     bottom cutoff line varies and cannot be used as a tracking cue
+2. **Generate images**: call AI image-gen API (DALL-E / SD) with each prompt, save as `sim/faces/<face_id>.png`
+   - Images should be high-res (≥ 512×512) with plain gray background
+3. **Remove background**: run `rembg` (U2Net) on each image to cut the person from the gray background,
+   producing PNGs with alpha channel — the background becomes fully transparent
+4. **Billboard must use alpha-transparent material**: update `model.sdf` to enable alpha blending
+   so the rectangular billboard plane boundary is invisible; only the face/body pixels are opaque.
+   OGRE2 PBR honors the PNG alpha channel automatically — add `<transparency>1</transparency>` to
+   the visual element and use the alpha-channel PNG as `albedo_map`.
+
+**Why transparent billboard**: without it, the rectangular plane boundary is a consistent geometric
+cue in every frame. The VLA could learn to center that rectangle rather than the face.
+
+**Why randomized crop level**: even with a transparent billboard, each individual image has a
+bottom cutoff (chin for neck_up, shoulder for shoulders_up, etc.). Varying it per face means
+no single cutoff position is reliable across the dataset.
+
+### Moving distractors (implementation)
+
+Spawn 0–2 simple Gazebo primitives (colored sphere or box) per scenario, give them slow random-walk
+trajectories via `gz service set_pose` calls on the same timer as face motion. Color and size are
+randomized each episode. This breaks the "track the moving thing" shortcut: multiple objects move
+but the oracle only tracks the face.
+
+Distractor objects must NOT have the `PosePublisher` plugin — they should not generate pose topics
+that could confuse the bridge. Spawn/despawn via `gz service /world/default/create` and `destroy`.
+
 ### Implementation notes
 
 - Use `gz service -s /world/default/set_pose` to teleport face billboards
-- Use Gazebo's `gz topic -t /world/default/light_config` to adjust lighting (or edit SDF and reload)
+- Use Gazebo's light config service or world reload to adjust lighting
 - Spawn/despawn additional faces via `gz service -s /world/default/create` and `destroy`
 - Each scenario is a dataclass — serializable to JSON for reproducibility
+- ~30% of single-face episodes should be **static face** (oracle outputs zero velocity); this
+  prevents the VLA learning "track motion" instead of "track face"
 
 ---
 
