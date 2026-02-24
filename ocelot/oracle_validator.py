@@ -142,15 +142,16 @@ class OracleValidator(Node):
     # ── reporting ──────────────────────────────────────────────────────────────
 
     def _report(self) -> None:
-        n = len(self._errors)
+        errors = self._errors[-200:] # last 10 seconds
+        n = len(errors)
         if n == 0:
             self.get_logger().info('No samples yet — waiting for face pose data.')
             return
 
-        mean_err = statistics.mean(self._errors)
-        std_err  = statistics.stdev(self._errors) if n > 1 else 0.0
-        max_err  = max(self._errors)
-        p95_err  = sorted(self._errors)[int(0.95 * n)]
+        mean_err = statistics.mean(errors)
+        std_err  = statistics.stdev(errors) if n > 1 else 0.0
+        max_err  = max(errors)
+        p95_err  = sorted(errors)[int(0.95 * n)]
 
         gate = mean_err < 5.0
         gate_str = 'PASS (<5 px)' if gate else 'FAIL (>=5 px)'

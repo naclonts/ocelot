@@ -1,6 +1,6 @@
 # Ocelot
 
-Pan-tilt face tracking robot (Raspberry Pi 5). Classical CV baseline with Haar cascade for now; VLA model coming soon.
+Pan-tilt face tracking robot (Raspberry Pi 5), plus a simulated environment for training. Classical CV baseline with Haar cascade for now; VLA model coming soon.
 
 ## Hardware
 | Component | Detail |
@@ -89,8 +89,6 @@ Measure tracking error in a second shell in the same container:
 ```bash
 ros2 run ocelot oracle_validator
 ```
-
-Every 10 seconds the validator prints mean/std/p95/max pixel error from image center, and whether the < 5 px success gate passes. Ctrl-C prints a final summary over the full run.
 
 ---
 

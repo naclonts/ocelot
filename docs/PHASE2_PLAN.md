@@ -261,20 +261,21 @@ This is exact inverse kinematics for a 2-DOF serial mechanism — closed-form, n
 
 ## Step 6 — Scenario Generator and Domain Randomization
 
-**File**: `sim/scenario_generator.py` — a Python class that generates randomized scenario configurations and applies them to a running Gazebo instance via service calls.
+**Dir**: `sim/scenario_generator/` — a Python class that generates randomized scenario configurations and applies them to a running Gazebo instance via service calls.
 
 ### Randomization parameters
 
 | Category | Parameters | Range |
 |---|---|---|
 | Faces | count | 1–3 |
-| Faces | texture per face | uniform sample from texture library |
+| Faces | texture per face | uniform sample from texture library, labeled ("man wearing pirate hat", "woman with long hair") |
 | Faces | initial position | x: [1.0–3.0 m], y: [−1.0–1.0 m], z: [0.5–1.5 m] |
 | Motion | pattern | static, linear_drift, sinusoidal, random_walk |
 | Motion | speed | [0.05–0.5 m/s] |
 | Lighting | sun direction | azimuth [0–360°], elevation [15–75°] |
 | Lighting | ambient intensity | [0.2–0.8] |
 | Background | wall color | random RGB in [0.3–0.9] each channel |
+| Background | wall texture | uniform sample from background textures library |
 | Camera | Gaussian noise σ | [0.0–0.015] |
 | Camera | brightness offset | [−20–+20] pixel value |
 
@@ -290,6 +291,7 @@ Labels are generated **deterministically** from scenario parameters — no human
 | 1 face, face right of center | `"track the face on the right"` |
 | 2+ faces, target is leftmost | `"follow the person on the left"` |
 | 2+ faces, target is rightmost | `"follow the person on the right"` |
+| 2+ faces, target is wearing hat and other isn't | `"follow the person in the hat"` |
 | 2+ faces, target is largest | `"track the closest person"` |
 
 Start with 4–6 label types. Add more in Phase 3 once the model trains.
