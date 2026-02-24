@@ -52,9 +52,9 @@ def _rz(theta: float) -> np.ndarray:
 def _ry(theta: float) -> np.ndarray:
     """Rotation matrix around Y axis (tilt joint). Positive = nose-down."""
     c, s = np.cos(theta), np.sin(theta)
-    return np.array([[ c, 0.0, s],
+    return np.array([[ c, 0.0, -s],
                      [0.0, 1.0, 0.0],
-                     [-s, 0.0, c]])
+                     [s, 0.0, c]])
 
 
 class OracleNode(Node):
@@ -64,12 +64,13 @@ class OracleNode(Node):
         self.declare_parameter('enabled', False)
         self.declare_parameter('kp_pan', 10.0)       # rad/s per radian of pan error
         self.declare_parameter('kp_tilt', 5.0)       # rad/s per radian of tilt error
-        self.declare_parameter('max_velocity', 2.0)  # rad/s clamp
+        self.declare_parameter('max_velocity', 1.0)  # rad/s clamp — must match URDF velocity="1.0"
         self.declare_parameter('deadband_rad', 0.002) # ~0.11° — suppress sub-pixel chatter
 
         self._pan_angle: float = 0.0
         self._tilt_angle: float = 0.0
         self._face_pos: np.ndarray | None = None
+        self._tick: int = 0  # diagnostic counter
 
         self.create_subscription(JointState, '/joint_states', self._joint_cb, 10)
         self.create_subscription(Pose, '/model/face_0/pose', self._face_pose_cb, 10)
@@ -147,7 +148,12 @@ class OracleNode(Node):
             twist.angular.y = float(np.clip(-kp_tilt * tilt_err, -max_vel, max_vel))
 
         self._pub.publish(twist)
-        self.get_logger().debug(
+        self._tick += 1
+        # Log at INFO for first 500 ticks (~25s) for diagnostic visibility, then downgrade to DEBUG
+        log_fn = self.get_logger().info if self._tick <= 500 else self.get_logger().debug
+        log_fn(
+            f'[t{self._tick}] '
+            f'joints=({self._pan_angle:.3f},{self._tilt_angle:.3f}) '
             f'face=({self._face_pos[0]:.2f},{self._face_pos[1]:.2f},{self._face_pos[2]:.2f}) '
             f'd_cam=({d_cam[0]:.2f},{d_cam[1]:.2f},{d_cam[2]:.2f}) '
             f'err=({np.degrees(pan_err):.1f}°,{np.degrees(tilt_err):.1f}°) '

@@ -17,6 +17,6 @@ tracker_node:
     kp_pan: -0.8         # negative = pan direction is inverted on this mount
     kp_tilt: 0.8
     deadband: 15         # pixel radius of center dead zone
-    max_velocity: 2.0    # velocity clamp (units fed to servo velocity_scale)
+    max_velocity: 1.0    # velocity clamp — must match URDF joint velocity="1.0"
     min_neighbors: 3     # haar cascade minNeighbors (lower = more sensitive, more false positives)
     min_face_size: 40    # haar cascade minSize in pixels

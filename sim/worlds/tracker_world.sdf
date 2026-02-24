@@ -65,9 +65,15 @@
             </plane>
           </geometry>
           <material>
-            <ambient>0.8 0.8 0.8 1</ambient>
-            <diffuse>0.8 0.8 0.8 1</diffuse>
-            <specular>0.8 0.8 0.8 1</specular>
+            <ambient>1.0 1.0 1.0 1</ambient>
+            <diffuse>1.0 1.0 1.0 1</diffuse>
+            <pbr>
+              <metal>
+                <albedo_map>model://ground_texture/materials/textures/dry-dirt.jpg</albedo_map>
+                <metalness>0.0</metalness>
+                <roughness>1.0</roughness>
+              </metal>
+            </pbr>
           </material>
         </visual>
       </link>
@@ -94,6 +100,14 @@
       <name>face_0</name>
       <uri>model://face_billboard</uri>
       <pose>2.0 0.3 0.5 0 0 0</pose>
+    </include>
+
+    <!-- Background wall: fills camera FOV at 5 m, hills texture makes
+         pan/tilt motion clearly visible as parallax from camera view. -->
+    <include>
+      <name>background_wall</name>
+      <uri>model://background_wall</uri>
+      <pose>50.0 0 20.0 0 0 0</pose>
     </include>
 
   </world>

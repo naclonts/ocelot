@@ -53,7 +53,7 @@
                 path listed in GZ_SIM_RESOURCE_PATH, then appends the
                 relative path below to reach the PNG file.
               -->
-              <albedo_map>model://face_billboard/materials/textures/face_01.png</albedo_map>
+              <albedo_map>model://face_billboard/materials/textures/pirate.png</albedo_map>
               <metalness>0.0</metalness>
               <roughness>1.0</roughness>
             </metal>

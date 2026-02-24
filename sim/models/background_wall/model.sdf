@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<sdf version="1.10">
+  <!--
+    Background wall: 80 × 30 m textured plane positioned 50 m in front of
+    the camera. At 50 m with 60° HFOV the wall subtends ~66°, overfilling
+    the frame so it reads as a distant horizon rather than a visible object.
+    Centred at z=1.5 (roughly eye level) for a natural horizon look.
+    Thin in X (2 mm) — only YZ faces are visible.
+  -->
+  <model name="background_wall">
+    <static>true</static>
+    <link name="link">
+      <visual name="wall_visual">
+        <geometry>
+          <box>
+            <size>0.002 120.0 40.0</size>
+          </box>
+        </geometry>
+        <material>
+          <ambient>1.0 1.0 1.0 1</ambient>
+          <diffuse>1.0 1.0 1.0 1</diffuse>
+          <pbr>
+            <metal>
+              <albedo_map>model://background_wall/materials/textures/hills.jpg</albedo_map>
+              <metalness>0.0</metalness>
+              <roughness>1.0</roughness>
+            </metal>
+          </pbr>
+        </material>
+      </visual>
+    </link>
+  </model>
+</sdf>

@@ -58,6 +58,21 @@ def launch_setup(context, *args, **kwargs):
         '<link name="base_link"/>', base_link_fix
     )
 
+    # Fix base_link to the world so the robot doesn't fall under gravity.
+    # Without this, base_link is a free-floating body (mass=0.001 kg) that
+    # sinks into the ground plane, creating contact constraints that combine
+    # with the velocity-control constraints to produce a singular DART LCP
+    # matrix → the dLDLTRemove assertion crash.
+    # Injected here (sim-only) so the real hardware URDF is unchanged.
+    world_joint = (
+        '  <link name="world"/>\n'
+        '  <joint name="world_fixed" type="fixed">\n'
+        '    <parent link="world"/>\n'
+        '    <child link="base_link"/>\n'
+        '  </joint>\n'
+    )
+    robot_description = robot_description.replace('</robot>', world_joint + '</robot>', 1)
+
     # Inject the gz_ros2_control Gazebo system plugin at launch time so the
     # URDF file itself remains unmodified (the real hardware stack ignores it).
     plugin_block = (
