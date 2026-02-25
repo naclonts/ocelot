@@ -270,6 +270,7 @@ def _build_prompt(attrs: dict) -> str:
 def generate_face_descriptions(
     count: int = 80,
     seed: int = 42,
+    start_id: int = 1,
 ) -> list[FaceDescription]:
     """
     Generate `count` diverse face descriptions.
@@ -293,7 +294,7 @@ def generate_face_descriptions(
     rng.shuffle(skin_cycle)
 
     for i in range(count):
-        face_id = f"face_{i+1:03d}"
+        face_id = f"face_{start_id + i:03d}"
 
         # Primary axes — cycled for guaranteed even coverage
         gender_key              = gender_cycle[i % len(gender_cycle)][0]
@@ -406,8 +407,16 @@ def main():
         "--out", type=Path, default=Path("sim/scenario_generator"),
         help=(
             "Output path: a directory (writes face_descriptions.json inside it) "
-            "or a .json file path (e.g. sim/scenario_generator/face_descriptions_002.json). "
+            "or a .json file path (e.g. sim/scenario_generator/face_descriptions_003.json). "
             "Default: sim/scenario_generator/"
+        ),
+    )
+    parser.add_argument(
+        "--append-to", type=Path, nargs="+", metavar="JSON",
+        help=(
+            "One or more existing face_descriptions JSON files to load. "
+            "New faces are generated starting from last_id+1 and the combined "
+            "list (existing + new) is written to --out."
         ),
     )
     args = parser.parse_args()
@@ -420,21 +429,36 @@ def main():
         json_path = out_dir / "face_descriptions.json"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    faces = generate_face_descriptions(count=args.count, seed=args.seed)
-    with open(json_path, "w") as f:
-        json.dump([asdict(face) for face in faces], f, indent=2)
-    print(f"Wrote {len(faces)} face descriptions → {json_path}")
+    # Load existing faces if --append-to was given
+    existing: list[dict] = []
+    start_id = 1
+    if args.append_to:
+        for p in args.append_to:
+            with open(p) as f:
+                existing.extend(json.load(f))
+        if existing:
+            last_num = max(
+                int(face["face_id"].split("_")[1]) for face in existing
+            )
+            start_id = last_num + 1
+            print(f"Loaded {len(existing)} existing faces from {len(args.append_to)} file(s). Next id: face_{start_id:03d}")
 
-    # Print summary
+    new_faces = generate_face_descriptions(count=args.count, seed=args.seed, start_id=start_id)
+    combined = existing + [asdict(face) for face in new_faces]
+    with open(json_path, "w") as f:
+        json.dump(combined, f, indent=2)
+    print(f"Wrote {len(combined)} face descriptions ({len(new_faces)} new) → {json_path}")
+
+    # Print summary of newly generated faces
     print()
-    print("=== Attribute coverage ===")
+    print("=== Attribute coverage (new faces) ===")
     from collections import Counter
     attrs_to_check = ["gender", "age_range", "skin_tone", "crop_level", "hat", "glasses", "facial_hair", "accessory", "shirt"]
     for attr in attrs_to_check:
-        counts = Counter(getattr(f, attr) for f in faces)
+        counts = Counter(getattr(f, attr) for f in new_faces)
         print(f"  {attr}:")
         for val, n in sorted(counts.items(), key=lambda x: -x[1]):
-            print(f"    {str(val):<20s} {n:3d}  ({100*n/len(faces):.0f}%)")
+            print(f"    {str(val):<20s} {n:3d}  ({100*n/len(new_faces):.0f}%)")
 
 
 if __name__ == "__main__":
