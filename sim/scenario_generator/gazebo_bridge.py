@@ -75,7 +75,7 @@ _FACE_SDF = """\
     <pose>{x} {y} {z} 0 0 0</pose>{pose_publisher_plugin}
     <link name="link">
       <visual name="face_visual">
-        <transparency>1</transparency>
+        <transparency>0</transparency>
         <geometry>
           <box><size>0.002 0.5 0.5</size></box>
         </geometry>
@@ -97,11 +97,11 @@ _BACKGROUND_SDF = """\
 <sdf version="1.10">
   <model name="background_wall">
     <static>true</static>
-    <pose>50 0 20 0 0 0</pose>
+    <pose>6 0 1.5 0 0 0</pose>
     <link name="link">
       <visual name="wall_visual">
         <geometry>
-          <box><size>0.002 120.0 40.0</size></box>
+          <box><size>0.002 12.0 6.0</size></box>
         </geometry>
         <material>
           <ambient>1.0 1.0 1.0 1</ambient>
