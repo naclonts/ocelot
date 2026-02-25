@@ -18,7 +18,10 @@ setup(
             'config/controllers.yaml',
         ]),
         ('share/' + package_name + '/urdf', ['urdf/pan_tilt.urdf']),
-        ('share/' + package_name + '/sim/worlds', ['sim/worlds/tracker_world.sdf']),
+        ('share/' + package_name + '/sim/worlds', [
+            'sim/worlds/tracker_world.sdf',
+            'sim/worlds/scenario_world.sdf',
+        ]),
         ('share/' + package_name + '/sim/models/face_billboard', [
             'sim/models/face_billboard/model.config',
             'sim/models/face_billboard/model.sdf',

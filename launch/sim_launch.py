@@ -19,11 +19,12 @@ def launch_setup(context, *args, **kwargs):
     pkg = get_package_share_directory('ocelot')
     headless = LaunchConfiguration('headless').perform(context)
     use_oracle = LaunchConfiguration('use_oracle').perform(context) == 'true'
+    world_name = LaunchConfiguration('world').perform(context)
 
     urdf_path = os.path.join(pkg, 'urdf', 'pan_tilt.urdf')
     controllers_yaml = os.path.join(pkg, 'config', 'controllers.yaml')
     tracker_params = os.path.join(pkg, 'config', 'tracker_params.yaml')
-    world_file = os.path.join(pkg, 'sim', 'worlds', 'tracker_world.sdf')
+    world_file = os.path.join(pkg, 'sim', 'worlds', f'{world_name}.sdf')
 
     # GZ_SIM_RESOURCE_PATH: Gazebo searches these directories for model://
     # URIs.  The source path is listed first so generated textures (written
@@ -237,6 +238,15 @@ def generate_launch_description():
             description=(
                 'Use oracle_node (privileged FK tracker) instead of tracker_node '
                 '(Haar cascade). Only one /cmd_vel publisher runs at a time.'
+            ),
+        ),
+        DeclareLaunchArgument(
+            'world',
+            default_value='tracker_world',
+            description=(
+                'World SDF to load (without .sdf extension). '
+                'tracker_world: static face + background (Step 4/5 default). '
+                'scenario_world: empty world for per-episode spawning (Step 6+).'
             ),
         ),
         OpaqueFunction(function=launch_setup),

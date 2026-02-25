@@ -16,7 +16,7 @@ source /ws/install/setup.bash && \
 ros2 launch ocelot sim_launch.py headless:=$(HEADLESS)
 endef
 
-.PHONY: sim-build sim sim-gui sim-gpu sim-shell sim-xauth faces dvc-push dvc-pull help
+.PHONY: sim-build sim sim-gui sim-gpu sim-shell sim-xauth faces backgrounds dvc-push dvc-pull help
 
 help:
 	@grep -E '^##' Makefile | sed 's/## //'
@@ -54,6 +54,13 @@ faces:
 	python3 sim/scenario_generator/face_descriptions.py --count 100 --seed 7 --out sim/faces/
 	python3 sim/scenario_generator/generate_face_images.py --input sim/faces/face_descriptions.json --out sim/faces/
 	dvc add sim/faces/
+	dvc push
+
+## backgrounds  generate plain background textures (6 solid-color PNGs)
+backgrounds:
+	python3 sim/scenario_generator/generate_backgrounds.py \
+	  --out sim/assets/backgrounds/
+	dvc add sim/assets
 	dvc push
 
 ## dvc-push   push all DVC-tracked data to S3
