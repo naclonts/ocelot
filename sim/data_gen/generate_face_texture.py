@@ -7,7 +7,7 @@ cascade when rendered in Gazebo at ~60-80 px height from 2 m distance.
 
 Run once before launching the sim (or after changing the face design):
 
-    python3 sim/generate_face_texture.py
+    python3 sim/data_gen/generate_face_texture.py
 
 Output: sim/models/face_billboard/materials/textures/face_01.png
 """
@@ -127,7 +127,7 @@ def _make_face(size: int = 512) -> np.ndarray:
 
 
 def main() -> None:
-    repo_root = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
     out_dir = os.path.join(
         repo_root, 'sim', 'models', 'face_billboard', 'materials', 'textures'
     )

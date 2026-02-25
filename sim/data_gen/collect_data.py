@@ -7,13 +7,25 @@ files that become the VLA training dataset.
 
 Usage (inside the sim container, with sim_launch.py already running):
 
-    python3 /ws/src/ocelot/sim/collect_data.py \\
+    # Single process:
+    python3 /ws/src/ocelot/sim/data_gen/collect_data.py \\
         --n_episodes 100 \\
-        --output /ws/src/ocelot/dataset \\
+        --output /ws/src/ocelot/sim/dataset \\
         --base_seed 0 \\
         [--base_ep 0]
 
-Prerequisites:
+    # Parallel sharding: each shard writes to <output>/shard_N/
+    for i in 0 1 2 3; do
+        GZ_PARTITION=$i python3 /ws/src/ocelot/sim/data_gen/collect_data.py \\
+            --n_episodes 25000 --shard $i \\
+            --output /ws/src/ocelot/sim/dataset &
+    done
+    wait
+    python3 /ws/src/ocelot/sim/data_gen/merge_shards.py \\
+        --parent /ws/src/ocelot/sim/dataset \\
+        --output /ws/src/ocelot/sim/dataset/merged
+
+Prerequisite:
     ros2 launch ocelot sim_launch.py world:=scenario_world use_oracle:=true headless:=true
 """
 
@@ -30,7 +42,7 @@ from datetime import datetime
 from pathlib import Path
 
 # Add project root to sys.path so "sim.scenario_generator.*" imports work.
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import cv2
 import h5py
@@ -249,7 +261,7 @@ def run_collection(node: CollectNode, args) -> None:
     from sim.scenario_generator.episode_runner import EpisodeRunner
     from sim.scenario_generator.scenario import ScenarioGenerator
 
-    sim_dir         = Path(__file__).parent
+    sim_dir         = Path(__file__).resolve().parents[1]
     faces_dir       = sim_dir / "scenario_generator"
     backgrounds_dir = sim_dir / "assets" / "backgrounds"
 
@@ -405,7 +417,23 @@ def main() -> None:
         "--base_ep", type=int, default=0,
         help="Episode index offset (for resuming or sharding).  Default: 0.",
     )
+    parser.add_argument(
+        "--shard", type=int, default=None,
+        help=(
+            "Shard index for parallel collection. "
+            "Sets base_ep=shard*n_episodes and base_seed=shard*n_episodes, "
+            "and writes to <output>/shard_<N>/. "
+            "Cannot be combined with --base_ep or --base_seed."
+        ),
+    )
     args = parser.parse_args()
+
+    if args.shard is not None:
+        if args.base_ep != 0 or args.base_seed != 0:
+            parser.error("--shard cannot be combined with --base_ep or --base_seed")
+        args.base_ep   = args.shard * args.n_episodes
+        args.base_seed = args.shard * args.n_episodes
+        args.output    = str(Path(args.output) / f"shard_{args.shard}")
 
     rclpy.init()
     node = CollectNode()

@@ -17,8 +17,8 @@ Usage (inside the sim container):
     runner.teardown()
 
 The runner does NOT touch ROS — it only speaks gz.transport via GazeboBridge.
-collect_data.py owns the ROS subscription loop and calls step() in sync with
-the camera topic.
+sim/data_gen/collect_data.py owns the ROS subscription loop and calls step()
+in sync with the camera topic.
 """
 
 import logging

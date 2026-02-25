@@ -200,7 +200,7 @@ def launch_setup(context, *args, **kwargs):
     )
 
     # Only oscillate the face billboard in tracker_world.
-    # In scenario_world, collect_data.py drives all entity motion via EpisodeRunner.
+    # In scenario_world, sim/data_gen/collect_data.py drives all entity motion via EpisodeRunner.
     actions = [set_gz_resource, gz_sim, rsp, spawn_robot, bridge, spawn_jsb,
                cmd_vel_node, cmd_vel_adapter, visualizer]
     if world_name == 'tracker_world':

@@ -5,8 +5,8 @@ Reads a collected dataset directory and verifies integrity, label distribution,
 velocity variance, frame shapes, and scenario-id uniqueness.
 
 Usage:
-    python3 sim/check_dataset.py --dataset /tmp/dataset_test
-    python3 sim/check_dataset.py --dataset /tmp/dataset_100 --sample_frames 10
+    python3 sim/data_gen/check_dataset.py --dataset /tmp/dataset_test
+    python3 sim/data_gen/check_dataset.py --dataset /tmp/dataset_100 --sample_frames 10
 
 Exit codes:
     0  — all checks passed
