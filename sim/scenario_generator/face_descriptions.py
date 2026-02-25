@@ -13,8 +13,11 @@ Usage (as a module):
     faces = generate_face_descriptions(count=80, seed=42)
 
 Usage (as a script):
-    python3 -m sim.scenario_generator.face_descriptions --count 100 --out sim/faces/
-    python3 sim/scenario_generator/face_descriptions.py --count 100 --out sim/faces/
+    python3 -m sim.scenario_generator.face_descriptions --count 100
+    python3 sim/scenario_generator/face_descriptions.py --count 100
+
+Output:
+    sim/scenario_generator/face_descriptions.json  (git-tracked — not DVC)
 
 Dataset convention:
     The canonical dataset uses --seed 7.  To extend the dataset with more faces,
@@ -400,18 +403,24 @@ def main():
         help="Random seed for reproducibility (default: 42)"
     )
     parser.add_argument(
-        "--out", type=Path, default=Path("sim/faces"),
-        help="Output directory (default: sim/faces/)"
+        "--out", type=Path, default=Path("sim/scenario_generator"),
+        help=(
+            "Output path: a directory (writes face_descriptions.json inside it) "
+            "or a .json file path (e.g. sim/scenario_generator/face_descriptions_002.json). "
+            "Default: sim/scenario_generator/"
+        ),
     )
     args = parser.parse_args()
 
-    out_dir = args.out
+    if args.out.suffix == ".json":
+        json_path = args.out
+        out_dir = json_path.parent
+    else:
+        out_dir = args.out
+        json_path = out_dir / "face_descriptions.json"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     faces = generate_face_descriptions(count=args.count, seed=args.seed)
-
-    # Write full JSON (attributes + prompts)
-    json_path = out_dir / "face_descriptions.json"
     with open(json_path, "w") as f:
         json.dump([asdict(face) for face in faces], f, indent=2)
     print(f"Wrote {len(faces)} face descriptions → {json_path}")
