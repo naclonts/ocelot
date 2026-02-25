@@ -8,7 +8,8 @@ calls labels.assign_label() to attach a natural-language instruction.
 Standard project layout assumed:
   sim/scenario_generator/    ← faces_dir (contains face_descriptions*.json)
   sim/assets/faces/          ← face PNG images (faces_dir.parent / "assets" / "faces")
-  sim/assets/backgrounds/    ← backgrounds_dir (contains backgrounds_manifest.json)
+  sim/assets/backgrounds/    ← backgrounds_dir (image files; DVC-tracked)
+  sim/scenario_generator/backgrounds_manifest.json  ← git-tracked metadata
 """
 
 import hashlib
@@ -109,8 +110,9 @@ class ScenarioGenerator:
         if not self._faces:
             raise ValueError(f"No face_descriptions*.json found in {faces_dir}")
 
-        # Load background manifest.
-        manifest_path = backgrounds_dir / "backgrounds_manifest.json"
+        # Load background manifest. Lives in scenario_generator/ (git-tracked),
+        # not in assets/ (DVC-tracked), so it's available after a plain git clone.
+        manifest_path = Path(__file__).resolve().parent / "backgrounds_manifest.json"
         if manifest_path.exists():
             self._backgrounds: list[dict] = json.loads(manifest_path.read_text())
         else:

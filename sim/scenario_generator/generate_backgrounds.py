@@ -68,8 +68,8 @@ def main():
     print(f"Generating plain backgrounds → {args.out}/")
     plain_entries = generate_plain_backgrounds(args.out)
 
-    # Merge with any existing manifest (preserve photo texture entries).
-    manifest_path = args.out / "backgrounds_manifest.json"
+    # Manifest lives in scenario_generator/ (git-tracked), not in assets/ (DVC-tracked).
+    manifest_path = Path(__file__).resolve().parent / "backgrounds_manifest.json"
     if manifest_path.exists():
         existing = json.loads(manifest_path.read_text())
         existing_ids = {e["id"] for e in existing}

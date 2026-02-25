@@ -1,0 +1,174 @@
+[
+  {
+    "id": "plain_white",
+    "tags": [
+      "plain"
+    ],
+    "file": "plain_white.png"
+  },
+  {
+    "id": "plain_light_gray",
+    "tags": [
+      "plain"
+    ],
+    "file": "plain_light_gray.png"
+  },
+  {
+    "id": "plain_dark_gray",
+    "tags": [
+      "plain"
+    ],
+    "file": "plain_dark_gray.png"
+  },
+  {
+    "id": "plain_beige",
+    "tags": [
+      "plain"
+    ],
+    "file": "plain_beige.png"
+  },
+  {
+    "id": "plain_off_white",
+    "tags": [
+      "plain"
+    ],
+    "file": "plain_off_white.png"
+  },
+  {
+    "id": "plain_blue_gray",
+    "tags": [
+      "plain"
+    ],
+    "file": "plain_blue_gray.png"
+  },
+  {
+    "id": "outdoor_hills",
+    "tags": [
+      "outdoor"
+    ],
+    "file": "outdoor_hills.jpg"
+  },
+  {
+    "id": "indoor_bedroom_cluttered",
+    "tags": [
+      "indoor",
+      "busy"
+    ],
+    "file": "indoor_bedroom_cluttered.jpg"
+  },
+  {
+    "id": "indoor_workshop_cluttered",
+    "tags": [
+      "indoor",
+      "busy"
+    ],
+    "file": "indoor_workshop_cluttered.jpg"
+  },
+  {
+    "id": "indoor_office_minimal",
+    "tags": [
+      "indoor"
+    ],
+    "file": "indoor_office_minimal.jpg"
+  },
+  {
+    "id": "indoor_living_room",
+    "tags": [
+      "indoor"
+    ],
+    "file": "indoor_living_room.jpg"
+  },
+  {
+    "id": "indoor_office_busy",
+    "tags": [
+      "indoor",
+      "busy"
+    ],
+    "file": "indoor_office_busy.jpg"
+  },
+  {
+    "id": "indoor_kitchen",
+    "tags": [
+      "indoor",
+      "busy"
+    ],
+    "file": "indoor_kitchen.jpg"
+  },
+  {
+    "id": "indoor_library",
+    "tags": [
+      "indoor",
+      "busy"
+    ],
+    "file": "indoor_library.jpg"
+  },
+  {
+    "id": "indoor_gym",
+    "tags": [
+      "indoor",
+      "busy"
+    ],
+    "file": "indoor_gym.jpg"
+  },
+  {
+    "id": "indoor_cafe",
+    "tags": [
+      "indoor",
+      "busy"
+    ],
+    "file": "indoor_cafe.jpg"
+  },
+  {
+    "id": "outdoor_open_sky",
+    "tags": [
+      "outdoor"
+    ],
+    "file": "outdoor_open_sky.jpg"
+  },
+  {
+    "id": "outdoor_field",
+    "tags": [
+      "outdoor"
+    ],
+    "file": "outdoor_field.jpg"
+  },
+  {
+    "id": "outdoor_park",
+    "tags": [
+      "outdoor"
+    ],
+    "file": "outdoor_park.jpg"
+  },
+  {
+    "id": "outdoor_street",
+    "tags": [
+      "outdoor",
+      "busy"
+    ],
+    "file": "outdoor_street.jpg"
+  },
+  {
+    "id": "outdoor_forest",
+    "tags": [
+      "outdoor",
+      "busy"
+    ],
+    "file": "outdoor_forest.jpg"
+  },
+  {
+    "id": "outdoor_garden",
+    "tags": [
+      "outdoor",
+      "busy"
+    ],
+    "file": "outdoor_garden.jpg"
+  },
+  {
+    "id": "outdoor_cityscape",
+    "tags": [
+      "outdoor",
+      "busy"
+    ],
+    "file": "outdoor_cityscape.jpg"
+  }
+]
