@@ -121,8 +121,9 @@ _LIGHT_SDF = """\
 <sdf version="1.10">
   <light type="point" name="{name}">
     <pose>{x} {y} {z} 0 0 0</pose>
-    <diffuse>{intensity} {intensity} {intensity} 1</diffuse>
+    <diffuse>1 1 1 1</diffuse>
     <specular>0.1 0.1 0.1 1</specular>
+    <intensity>{intensity}</intensity>
     <attenuation>
       <range>20</range>
       <constant>0.1</constant>

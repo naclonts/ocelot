@@ -14,6 +14,12 @@ Exit 0 = all checks passed.  Exit 1 = one or more checks failed.
 import subprocess
 import sys
 import time
+from pathlib import Path
+
+# Ensure project root is on sys.path so `sim.*` imports work regardless of cwd.
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
 
 # Must be inside the container (gz.transport available) to be useful.
 from sim.scenario_generator.gazebo_bridge import GazeboBridge, _GZ_AVAILABLE
@@ -31,16 +37,16 @@ FAIL = "\033[31mFAIL\033[0m"
 
 
 def gz_model_list() -> list[str]:
-    """Return model names currently in WORLD via `gz model --list`."""
+    """Return model names currently in the world via `gz model --list`."""
     result = subprocess.run(
-        ["gz", "model", "--list", "-w", WORLD],
+        ["gz", "model", "--list"],
         capture_output=True, text=True, timeout=10,
     )
     names = []
     for line in result.stdout.splitlines():
         line = line.strip()
-        if line and not line.startswith("Requesting"):
-            names.append(line)
+        if line.startswith("- "):
+            names.append(line[2:])
     return names
 
 
