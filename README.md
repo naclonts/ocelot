@@ -138,6 +138,38 @@ gz model --list   # should show only: ground_plane, ocelot
 gz light --list   # should be empty
 ```
 
+#### Data collection (Step 7)
+
+Collect synchronized (frame, language label, pan_vel, tilt_vel) episodes from the running oracle and write them as compressed HDF5 files.
+
+**Output path**: always write to `/ws/src/ocelot/dataset` so files persist on the host at `~/projects/ocelot/dataset/`. Writing to `/tmp/` is ephemeral — lost when the container exits.
+
+```bash
+# Terminal 1 — start sim stack (must be running before collect_data.py)
+docker compose -f deploy/docker/docker-compose.sim.yml run --rm --name ocelot-sim sim bash -c "
+  source /opt/ros/jazzy/setup.bash && cd /ws &&
+  colcon build --symlink-install --packages-select ocelot --event-handlers console_direct- &&
+  source /ws/install/setup.bash &&
+  ros2 launch ocelot sim_launch.py world:=scenario_world use_oracle:=true headless:=true"
+
+# Terminal 2 — collect episodes (runs against the live sim in Terminal 1)
+docker exec -e ROS_DOMAIN_ID=1 ocelot-sim bash -c "
+  source /opt/ros/jazzy/setup.bash && source /ws/install/setup.bash &&
+  python3 /ws/src/ocelot/sim/collect_data.py \
+    --n_episodes 100 \
+    --output /ws/src/ocelot/dataset \
+    --base_seed 0"
+```
+
+Episodes appear as they are written: `dataset/episodes/ep_NNNNNN.h5`. After collection, run the quality check:
+
+```bash
+docker exec -e ROS_DOMAIN_ID=1 ocelot-sim \
+  python3 /ws/src/ocelot/sim/check_dataset.py --dataset /ws/src/ocelot/dataset
+```
+
+For parallel sharding (Step 9), run multiple collectors with non-overlapping `--base_seed` and `--base_ep` ranges, each writing to a separate output directory.
+
 ---
 
 ## Rosbag

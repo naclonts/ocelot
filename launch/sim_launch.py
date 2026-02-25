@@ -199,8 +199,12 @@ def launch_setup(context, *args, **kwargs):
         output='screen',
     )
 
+    # Only oscillate the face billboard in tracker_world (Step 4/5 testing).
+    # In scenario_world, collect_data.py drives all entity motion via EpisodeRunner.
     actions = [set_gz_resource, gz_sim, rsp, spawn_robot, bridge, spawn_jsb,
-               cmd_vel_node, cmd_vel_adapter, visualizer, move_face]
+               cmd_vel_node, cmd_vel_adapter, visualizer]
+    if world_name == 'tracker_world':
+        actions.append(move_face)
 
     # Open rqt_image_view to monitor the annotated camera feed.
     # Runs in both headless and GUI modes — in headless mode this is the only
