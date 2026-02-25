@@ -649,7 +649,7 @@ All tests are pure Python — no ROS, no Gazebo, no network required.
 Each step is self-contained and can be handed to a fresh agent.
 Reference this document and `docs/PHASE2_PLAN.md` as context.
 
-### Step A — `scenario_world.sdf` + launch arg
+### Step A — `scenario_world.sdf` + launch arg ✅ DONE
 
 **Files**: `sim/worlds/scenario_world.sdf`, `launch/sim_launch.py`
 
@@ -666,7 +666,7 @@ starts cleanly; `gz model --list` shows only `ground_plane` and `ocelot`; no err
 
 ---
 
-### Step B — Background texture library
+### Step B — Background texture library [PARTIAL]
 
 **Files**: `sim/assets/backgrounds/*.jpg`, `sim/assets/backgrounds/backgrounds_manifest.json`,
 `sim/scenario_generator/generate_backgrounds.py`, `Makefile`
@@ -688,11 +688,18 @@ Run `dvc add sim/assets` to regenerate `sim/assets.dvc`.
 Add `Makefile` target `backgrounds` that documents how the textures were sourced
 (even if that's just a shell script that downloads them).
 
+**Status**:
+- ✅ `generate_backgrounds.py` script written (generates 6 plain-color PNGs)
+- ✅ `Makefile` `backgrounds` target added
+- ❌ Script not yet run — `sim/assets/backgrounds/` does not exist, no PNGs generated
+- ❌ Photo textures (indoor/outdoor, ~14 images) not yet acquired
+- ❌ DVC not updated (`dvc add sim/assets` not run)
+
 **Acceptance**: `ls sim/assets/backgrounds/ | wc -l` ≥ 20, `dvc status` is clean.
 
 ---
 
-### Step C — `ScenarioConfig` dataclass + `ScenarioGenerator`
+### Step C — `ScenarioConfig` dataclass + `ScenarioGenerator` ✅ DONE
 
 **Files**: `sim/scenario_generator/scenario.py`
 
@@ -709,7 +716,7 @@ Does NOT implement label assignment (that's Step D) — use a placeholder
 
 ---
 
-### Step D — Language label system
+### Step D — Language label system ✅ DONE
 
 **Files**: `sim/scenario_generator/labels.py`, update `sim/scenario_generator/scenario.py`
 to call `assign_label()`.
@@ -721,7 +728,7 @@ and `ATTR_DISPLAY`. Wire into `ScenarioGenerator.sample()`.
 
 ---
 
-### Step E — Motion patterns
+### Step E — Motion patterns ✅ DONE
 
 **Files**: `sim/scenario_generator/motion.py`
 
@@ -734,7 +741,7 @@ Implement the four pattern classes from §7. Each must:
 
 ---
 
-### Step F — Gazebo bridge
+### Step F — Gazebo bridge ❌ TODO
 
 **Files**: `sim/scenario_generator/gazebo_bridge.py`
 
@@ -755,7 +762,7 @@ changes; despawn, verify it's gone. Background and light spawning verified visua
 
 ---
 
-### Step G — Episode runner
+### Step G — Episode runner ❌ TODO
 
 **Files**: `sim/scenario_generator/episode_runner.py`
 
@@ -776,7 +783,7 @@ and exit cleanly.
 
 ---
 
-### Step H — Full test suite
+### Step H — Full test suite ✅ DONE
 
 **Files**: `tests/sim/test_scenario_generator.py`, `tests/sim/__init__.py`
 
@@ -789,12 +796,12 @@ running Gazebo instance (Steps A–E are pure Python; Steps F–G are mocked or 
 
 ## 14. Success Gates
 
-- [ ] `pytest tests/sim/ -v` passes (no Gazebo required)
-- [ ] All 6+ label keys appear in a 500-episode sample
-- [ ] Label distribution: no key < 5% of single-episode or multi-episode pool
-- [ ] 10 sequential episodes with different seeds complete without Gazebo crash
-- [ ] No entity leaks: `gz model --list` + `gz light --list` clean after each teardown
-- [ ] Background texture variety confirmed visually across 5 episodes
-- [ ] Lighting variation visible across 5 episodes (check rendered camera frames)
-- [ ] `ScenarioConfig.to_dict()` → JSON → `from_dict()` round-trip lossless
-- [ ] `dvc status` is clean after adding backgrounds
+- [x] `pytest tests/sim/ -v` passes (no Gazebo required)
+- [x] All 6+ label keys appear in a 500-episode sample
+- [x] Label distribution: no key < 5% of single-episode or multi-episode pool
+- [ ] 10 sequential episodes with different seeds complete without Gazebo crash (needs Step F/G)
+- [ ] No entity leaks: `gz model --list` + `gz light --list` clean after each teardown (needs Step F/G)
+- [ ] Background texture variety confirmed visually across 5 episodes (needs Step B + F/G)
+- [ ] Lighting variation visible across 5 episodes (check rendered camera frames) (needs Step F/G)
+- [x] `ScenarioConfig.to_dict()` → JSON → `from_dict()` round-trip lossless
+- [ ] `dvc status` is clean after adding backgrounds (needs Step B)
