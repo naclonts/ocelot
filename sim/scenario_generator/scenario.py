@@ -109,6 +109,15 @@ class ScenarioGenerator:
             self._faces.extend(json.loads(p.read_text()))
         if not self._faces:
             raise ValueError(f"No face_descriptions*.json found in {faces_dir}")
+        # TODO: remove cap once face_101–face_200 images are generated.
+        if len(self._faces) > 100:
+            import warnings
+            warnings.warn(
+                "Face pool capped at 100 — face_101+ images not yet generated. "
+                "Run generate_face_images.py for the full set and remove this cap.",
+                stacklevel=2,
+            )
+        self._faces = self._faces[:100]
 
         # Load background manifest. Lives in scenario_generator/ (git-tracked),
         # not in assets/ (DVC-tracked), so it's available after a plain git clone.

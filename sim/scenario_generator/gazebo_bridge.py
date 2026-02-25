@@ -134,6 +134,23 @@ _LIGHT_SDF = """\
   </light>
 </sdf>"""
 
+_FILL_LIGHT_SDF = """\
+<sdf version="1.10">
+  <light type="point" name="{name}">
+    <pose>{x} {y} {z} 0 0 0</pose>
+    <diffuse>{r} {g} {b} 1</diffuse>
+    <specular>0.05 0.05 0.05 1</specular>
+    <intensity>0.6</intensity>
+    <attenuation>
+      <range>20</range>
+      <constant>0.2</constant>
+      <linear>0.02</linear>
+      <quadratic>0.002</quadratic>
+    </attenuation>
+    <cast_shadows>false</cast_shadows>
+  </light>
+</sdf>"""
+
 _DISTRACTOR_SDF = """\
 <sdf version="1.10">
   <model name="{name}">
@@ -322,6 +339,35 @@ class GazeboBridge:
         )
         return self._spawn_sdf(sdf, _ENTITY_LIGHT, name)
 
+    def spawn_fill_light(
+        self, azimuth_deg: float, elevation_deg: float, ambient_rgb: tuple
+    ) -> bool:
+        """Spawn a soft fill light on the hemisphere opposite the key light.
+
+        Position: same elevation as the key light, azimuth rotated 180°.
+        Diffuse = ambient_rgb — tints the scene fill with the sampled ambient colour.
+        Intensity is fixed at 0.6, always softer than the key light (0.5–2.0 range).
+        Despawns any previous fill light first.
+        """
+        name = "episode_light_fill"
+        if name in self._spawned:
+            self.despawn(name)
+
+        r = 6.0
+        az = math.radians((azimuth_deg + 180) % 360)
+        el = math.radians(elevation_deg)
+        x = r * math.cos(el) * math.cos(az) + 1.5
+        y = r * math.cos(el) * math.sin(az)
+        z = r * math.sin(el)
+
+        cr, cg, cb = ambient_rgb
+        sdf = _FILL_LIGHT_SDF.format(
+            name=name,
+            x=x, y=y, z=z,
+            r=cr, g=cg, b=cb,
+        )
+        return self._spawn_sdf(sdf, _ENTITY_LIGHT, name)
+
     def spawn_distractor(
         self, name: str, pos: tuple, shape: str, color_rgb: tuple
     ) -> bool:
@@ -353,6 +399,11 @@ class GazeboBridge:
             config.lighting_azimuth_deg,
             config.lighting_elevation_deg,
             config.lighting_intensity,
+        )
+        self.spawn_fill_light(
+            config.lighting_azimuth_deg,
+            config.lighting_elevation_deg,
+            config.ambient_rgb,
         )
         for i, face_cfg in enumerate(config.faces):
             self.spawn_face(

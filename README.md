@@ -90,6 +90,54 @@ Measure tracking error in a second shell in the same container:
 ros2 run ocelot oracle_validator
 ```
 
+#### Episode runner (scenario generator)
+
+The episode runner generates randomized scenarios — face textures, background, lighting, motion
+patterns, language labels — and drives them in a live Gazebo session. Use it to smoke-test Step 6
+before running the full data collection (Step 7).
+
+**Prerequisites** (assets must exist before running):
+
+```bash
+# Face description JSONs (git-tracked — present after clone if committed)
+ls sim/scenario_generator/face_descriptions*.json
+
+# Face PNGs in sim/assets/faces/ and background PNGs in sim/assets/backgrounds/
+# Pull from DVC if available:
+dvc pull
+# Or regenerate locally (backgrounds take seconds; faces require an AI image API):
+make backgrounds                          # generates 6 plain-color PNGs; no API required
+# make faces                             # generates descriptions + calls image API
+```
+
+**Run a single episode inside the sim container:**
+
+```bash
+make sim-shell   # open an interactive shell in a fresh sim container
+
+# Inside the container — build, start sim in background, then run one episode
+colcon build --symlink-install --packages-select ocelot --event-handlers console_direct-
+source /ws/install/setup.bash
+ros2 launch ocelot sim_launch.py world:=scenario_world headless:=true use_oracle:=true &
+sleep 15   # wait for Gazebo + ros2_control to finish starting
+
+python3 /ws/src/ocelot/sim/scenario_generator/run_one_episode.py --seed 42 --duration 10
+```
+
+Exit code 0 means the episode completed without error. The script prints the full scenario config,
+face positions every second, and final positions at teardown.
+
+**Run 10 sequential episodes (entity leak check):**
+
+```bash
+for i in $(seq 0 9); do
+    python3 /ws/src/ocelot/sim/scenario_generator/run_one_episode.py --seed $i --duration 5
+done
+# After all episodes: verify no leaked entities
+gz model --list   # should show only: ground_plane, ocelot
+gz light --list   # should be empty
+```
+
 ---
 
 ## Rosbag

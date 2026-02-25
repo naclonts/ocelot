@@ -450,8 +450,10 @@ def spawn_background(background_abs_path: str) -> bool:
     """Despawn previous background_wall and spawn a new one with the given texture.
     Geometry: same as model.sdf — 0.002 × 120.0 × 40.0 m box at x=50, z=20."""
 
-def spawn_key_light(azimuth_deg: float, elevation_deg: float,
-                    intensity: float) -> bool:
+def spawn_key_light(azimuth_deg: float, elevation_deg: float, intensity: float) -> bool:
+def spawn_fill_light(azimuth_deg: float, elevation_deg: float, ambient_rgb: tuple) -> bool:
+    """Soft fill light at azimuth+180°, same elevation.
+    diffuse = ambient_rgb; intensity fixed at 0.6 (always softer than key)."""
     """Spawn a point light at a position on a hemisphere above the scene.
     Spherical → Cartesian:
         r = 6.0 m from scene origin
@@ -741,7 +743,7 @@ Implement the four pattern classes from §7. Each must:
 
 ---
 
-### Step F — Gazebo bridge ✅ DONE
+### Step F — Gazebo bridge ✅ DONE (fill light added)
 
 **Files**: `sim/scenario_generator/gazebo_bridge.py`
 
@@ -799,9 +801,9 @@ running Gazebo instance (Steps A–E are pure Python; Steps F–G are mocked or 
 - [x] `pytest tests/sim/ -v` passes (no Gazebo required)
 - [x] All 6+ label keys appear in a 500-episode sample
 - [x] Label distribution: no key < 5% of single-episode or multi-episode pool
-- [ ] 10 sequential episodes with different seeds complete without Gazebo crash (needs Step F/G)
-- [ ] No entity leaks: `gz model --list` + `gz light --list` clean after each teardown (needs Step F/G)
-- [ ] Background texture variety confirmed visually across 5 episodes (needs Step B + F/G)
-- [ ] Lighting variation visible across 5 episodes (check rendered camera frames) (needs Step F/G)
+- [ ] 10 sequential episodes with different seeds complete without Gazebo crash
+- [ ] No entity leaks: `gz model --list` + `gz light --list` clean after each teardown
+- [ ] Background texture variety confirmed visually across 5 episodes
+- [ ] Lighting variation (key + fill) visible across 5 episodes (check rendered camera frames)
 - [x] `ScenarioConfig.to_dict()` → JSON → `from_dict()` round-trip lossless
 - [ ] `dvc status` is clean after adding backgrounds (needs Step B)
