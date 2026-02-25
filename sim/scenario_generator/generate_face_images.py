@@ -14,24 +14,26 @@ Usage:
     python3 generate_face_images.py --input sim/faces/face_descriptions.json \\
         --model gpt-image-1 --quality high --size 1024x1024
     python3 generate_face_images.py --input sim/faces/face_descriptions.json \\
-        --model runware-layerdiffuse
+        --model gpt-image-1.5 --provider runware
     python3 generate_face_images.py --input ... --dry-run      # preview only
     python3 generate_face_images.py --input ... --start 10 --end 20  # subset
 
-Models (all produce native transparent-background RGBA PNG):
-    gpt-image-1          — default; OpenAI; ~$0.05–0.25/image (quality: low/med/high)
+Models:
+    gpt-image-1          — OpenAI; ~$0.05–0.25/image (quality: low/med/high)
     gpt-image-1.5        — OpenAI updated variant; same pricing tiers
+                           also available via --provider runware (~$0.009–0.20/image)
     gpt-image-1-mini     — OpenAI cheaper variant; ~$0.011–0.016/image
-    runware-layerdiffuse — Runware FLUX Dev + LayerDiffuse; ~$0.003–0.01/image;
-                           alpha channel baked into diffusion (best hair/edge quality)
-                           Docs: https://runware.ai/docs/image-inference/api-reference
+
+Providers:
+    openai   (default) — calls OpenAI API directly; requires OPENAI_API_KEY
+    runware            — routes through Runware; requires RUNWARE_API_KEY
+                         only gpt-image-1.5 is currently supported on Runware
 
 Environment:
-    OPENAI_API_KEY    — required for gpt-image-* models
-    RUNWARE_API_KEY   — required for runware-layerdiffuse
-                        Sign up at https://runware.ai (new accounts get $10 free)
+    OPENAI_API_KEY    — required for provider=openai
+    RUNWARE_API_KEY   — required for provider=runware
     Both are loaded automatically from a .env file in the project root
-    (two directories above this script), or from the shell environment.
+    or from the shell environment.
 """
 
 import argparse
@@ -44,16 +46,17 @@ import uuid as _uuid_mod
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
-# Model constants
+# Model / provider constants
 # ---------------------------------------------------------------------------
 
 _OPENAI_MODELS  = frozenset({"gpt-image-1", "gpt-image-1.5", "gpt-image-1-mini"})
-_RUNWARE_MODELS = frozenset({"runware-layerdiffuse"})
-_ALL_MODELS     = sorted(_OPENAI_MODELS | _RUNWARE_MODELS)
+_ALL_MODELS     = sorted(_OPENAI_MODELS)
 
-# Runware internal model ID for FLUX Dev (the only backend that supports LayerDiffuse)
-_RUNWARE_INTERNAL_MODEL = "runware:101@1"
-_RUNWARE_API_URL        = "https://api.runware.ai/v1"
+# Models available via Runware's OpenAI-compatible proxy and their internal IDs
+_RUNWARE_MODEL_IDS = {
+    "gpt-image-1.5": "openai:4@1",
+}
+_RUNWARE_API_URL = "https://api.runware.ai/v1"
 
 # ---------------------------------------------------------------------------
 # .env loader
@@ -131,7 +134,7 @@ def _parse_wh(size: str) -> tuple[int, int]:
 
 
 # ---------------------------------------------------------------------------
-# OpenAI backend
+# OpenAI backend (direct)
 # ---------------------------------------------------------------------------
 
 def _generate_openai(client, face_id: str, prompt: str, *, model: str, size: str, quality: str) -> bytes:
@@ -169,18 +172,14 @@ def _generate_openai(client, face_id: str, prompt: str, *, model: str, size: str
 
 
 # ---------------------------------------------------------------------------
-# Runware backend (FLUX Dev + LayerDiffuse)
+# Runware backend (OpenAI models proxied through Runware)
 # ---------------------------------------------------------------------------
 
-def _generate_runware(api_key: str, face_id: str, prompt: str, *, size: str) -> bytes:
+def _generate_runware(api_key: str, face_id: str, prompt: str, *, model: str, size: str, quality: str) -> bytes:
     """
-    Call the Runware LayerDiffuse API and return raw PNG bytes.
-
-    LayerDiffuse bakes the alpha channel into the diffusion process itself
-    (latent transparency), giving cleaner edges on hair and fine detail
-    boundaries than any post-processing removal approach.
-
-    Docs: https://runware.ai/docs/image-inference/api-reference
+    Call the Runware API with an OpenAI model and return raw PNG bytes.
+    Uses providerSettings.openai to pass background=transparent and quality.
+    Docs: https://runware.ai/docs/en/providers/openai
     """
     try:
         import requests as _requests
@@ -188,20 +187,26 @@ def _generate_runware(api_key: str, face_id: str, prompt: str, *, size: str) -> 
         print("ERROR: requests package not installed.  Run: pip install requests", file=sys.stderr)
         sys.exit(1)
 
+    runware_model_id = _RUNWARE_MODEL_IDS[model]
     clean_prompt = _sanitize_prompt(prompt)
     w, h = _parse_wh(size)
 
     payload = [{
-        "taskType":       "imageInference",
-        "taskUUID":       str(_uuid_mod.uuid4()),
-        "positivePrompt": clean_prompt + ", isolated subject, no background, cutout",
-        "model":          _RUNWARE_INTERNAL_MODEL,
-        "width":          w,
-        "height":         h,
-        "numberResults":  1,
-        "outputType":     ["base64Data"],
-        "outputFormat":   "PNG",
-        "layerDiffuse":   True,
+        "taskType":        "imageInference",
+        "taskUUID":        str(_uuid_mod.uuid4()),
+        "model":           runware_model_id,
+        "positivePrompt":  clean_prompt,
+        "width":           w,
+        "height":          h,
+        "numberResults":   1,
+        "outputType":      ["base64Data"],
+        "outputFormat":    "PNG",
+        "providerSettings": {
+            "openai": {
+                "quality":    quality,
+                "background": "transparent",
+            }
+        },
     }]
 
     headers = {
@@ -221,7 +226,6 @@ def _generate_runware(api_key: str, face_id: str, prompt: str, *, size: str) -> 
             resp.raise_for_status()
             body = resp.json()
 
-            # Runware returns {"data": [...]} with one result per task
             results = body.get("data") or body.get("results") or []
             if not results:
                 raise ValueError(f"Empty result list from Runware: {body}")
@@ -230,12 +234,11 @@ def _generate_runware(api_key: str, face_id: str, prompt: str, *, size: str) -> 
             if "error" in result:
                 raise ValueError(f"Runware task error: {result['error']}")
 
-            # Field name for base64 payload (prefer imageBase64Data, fall back to URL)
             b64 = result.get("imageBase64Data") or result.get("base64Data")
             if b64:
                 return base64.b64decode(b64)
 
-            # Fallback: if the server returned a URL despite outputType=base64Data
+            # Fallback: download from URL if base64 wasn't returned
             url = result.get("imageURL")
             if url:
                 img_resp = _requests.get(url, timeout=60)
@@ -261,13 +264,11 @@ def _generate_runware(api_key: str, face_id: str, prompt: str, *, size: str) -> 
 # Dispatch
 # ---------------------------------------------------------------------------
 
-def _generate_one(ctx: dict, face_id: str, prompt: str, *, model: str, size: str, quality: str) -> bytes:
-    """Route to the correct backend based on model name."""
-    if model in _OPENAI_MODELS:
-        return _generate_openai(ctx["openai_client"], face_id, prompt, model=model, size=size, quality=quality)
-    if model in _RUNWARE_MODELS:
-        return _generate_runware(ctx["runware_api_key"], face_id, prompt, size=size)
-    raise ValueError(f"Unknown model: {model!r}")
+def _generate_one(ctx: dict, face_id: str, prompt: str, *, model: str, provider: str, size: str, quality: str) -> bytes:
+    """Route to the correct backend based on provider."""
+    if provider == "runware":
+        return _generate_runware(ctx["runware_api_key"], face_id, prompt, model=model, size=size, quality=quality)
+    return _generate_openai(ctx["openai_client"], face_id, prompt, model=model, size=size, quality=quality)
 
 
 # ---------------------------------------------------------------------------
@@ -288,15 +289,19 @@ def main():
     )
     parser.add_argument(
         "--model", "-m", default="gpt-image-1.5", choices=_ALL_MODELS,
+        help="Image generation model (default: gpt-image-1.5)",
+    )
+    parser.add_argument(
+        "--provider", default="openai", choices=["openai", "runware"],
         help=(
-            "Image generation model/backend (default: gpt-image-1.5).  "
-            "gpt-image-* require OPENAI_API_KEY; "
-            "runware-layerdiffuse requires RUNWARE_API_KEY."
+            "API provider (default: openai).  "
+            "'runware' proxies the request through Runware; "
+            "only gpt-image-1.5 is currently supported there."
         ),
     )
     parser.add_argument(
         "--quality", choices=["low", "medium", "high"], default="high",
-        help="Image quality for OpenAI models (default: high; ignored for Runware)",
+        help="Image quality (default: high)",
     )
     parser.add_argument(
         "--size", default="1024x1024",
@@ -324,6 +329,16 @@ def main():
         help="Print what would be generated without calling the API",
     )
     args = parser.parse_args()
+
+    # ---- Validate provider/model combo -------------------------------------
+    if args.provider == "runware" and args.model not in _RUNWARE_MODEL_IDS:
+        supported = ", ".join(sorted(_RUNWARE_MODEL_IDS))
+        print(
+            f"ERROR: --provider runware only supports: {supported}\n"
+            f"  Got: --model {args.model}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     # ---- Validate input file -----------------------------------------------
     if not args.input.exists():
@@ -357,9 +372,9 @@ def main():
     if args.dry_run:
         limit_str = f", limit={args.limit}" if args.limit is not None else ""
         print(f"Dry run — {len(subset)} face(s), indices [{start}, {end}){limit_str}")
-        print(f"  model   : {args.model}")
-        print(f"  out_dir : {out_dir}")
-        print(f"  quality : {args.quality}  size: {args.size}")
+        print(f"  model    : {args.model}  provider={args.provider}")
+        print(f"  out_dir  : {out_dir}")
+        print(f"  quality  : {args.quality}  size: {args.size}")
         print()
         for face in subset:
             out_path   = out_dir / f"{face['face_id']}.png"
@@ -375,7 +390,7 @@ def main():
 
     ctx: dict = {}
 
-    if args.model in _OPENAI_MODELS:
+    if args.provider == "openai":
         api_key = os.environ.get("OPENAI_API_KEY")
         if not api_key:
             print(
@@ -392,14 +407,13 @@ def main():
             sys.exit(1)
         ctx["openai_client"] = OpenAI(api_key=api_key)
 
-    elif args.model in _RUNWARE_MODELS:
+    elif args.provider == "runware":
         api_key = os.environ.get("RUNWARE_API_KEY")
         if not api_key:
             print(
                 f"ERROR: RUNWARE_API_KEY not set.\n"
                 f"  Add it to {_PROJECT_ROOT / '.env'}  (RUNWARE_API_KEY=...)\n"
-                f"  or export it in your shell.\n"
-                f"  Sign up at https://runware.ai — new accounts receive $10 free credits.",
+                f"  or export it in your shell.",
                 file=sys.stderr,
             )
             sys.exit(1)
@@ -411,9 +425,8 @@ def main():
     generated = 0
     failed    = []
 
-    quality_note = f"  quality={args.quality}" if args.model in _OPENAI_MODELS else ""
     print(f"Generating {total} face image(s) → {out_dir}")
-    print(f"  model={args.model}{quality_note}  size={args.size} (waist_up→1024x1536)  delay={args.delay}s")
+    print(f"  model={args.model}  provider={args.provider}  quality={args.quality}  size={args.size} (waist_up→1024x1536)  delay={args.delay}s")
     print()
 
     for idx, face in enumerate(subset, start=1):
@@ -436,7 +449,7 @@ def main():
         try:
             png_bytes = _generate_one(
                 ctx, face_id, prompt,
-                model=args.model, size=size, quality=args.quality,
+                model=args.model, provider=args.provider, size=size, quality=args.quality,
             )
         except Exception as exc:
             print(f"\n  ERROR: {exc}")
