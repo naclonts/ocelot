@@ -152,8 +152,8 @@ def launch_setup(context, *args, **kwargs):
     )
 
     # cmd_vel publisher — mutually exclusive:
-    #   use_oracle=false (default): tracker_node (Haar cascade, Phase 1 behaviour)
-    #   use_oracle=true:            oracle_node  (privileged ground-truth FK, Step 5)
+    #   use_oracle=false (default): tracker_node (Haar cascade)
+    #   use_oracle=true:            oracle_node  (privileged ground-truth FK)
     # Only one node runs at a time to avoid conflicting /cmd_vel writes.
     # tracker_node publishes Twist() zeros when disabled, which would zero out
     # oracle commands — so we simply don't launch the other node.
@@ -199,7 +199,7 @@ def launch_setup(context, *args, **kwargs):
         output='screen',
     )
 
-    # Only oscillate the face billboard in tracker_world (Step 4/5 testing).
+    # Only oscillate the face billboard in tracker_world.
     # In scenario_world, collect_data.py drives all entity motion via EpisodeRunner.
     actions = [set_gz_resource, gz_sim, rsp, spawn_robot, bridge, spawn_jsb,
                cmd_vel_node, cmd_vel_adapter, visualizer]
@@ -249,8 +249,8 @@ def generate_launch_description():
             default_value='tracker_world',
             description=(
                 'World SDF to load (without .sdf extension). '
-                'tracker_world: static face + background (Step 4/5 default). '
-                'scenario_world: empty world for per-episode spawning (Step 6+).'
+                'tracker_world: static face + background (parity check / manual testing). '
+                'scenario_world: empty world for per-episode spawning (data collection).'
             ),
         ),
         OpaqueFunction(function=launch_setup),

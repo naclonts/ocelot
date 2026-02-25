@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Smoke-test script for EpisodeRunner (Step G acceptance test).
+Smoke-test script for EpisodeRunner.
 
 Requires a running Gazebo instance with scenario_world loaded:
     ros2 launch ocelot sim_launch.py world:=scenario_world headless:=true use_oracle:=true
@@ -71,7 +71,7 @@ def _print_config(config) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Run a single randomized episode in Gazebo (Step G smoke test)."
+        description="Run a single randomized episode in Gazebo."
     )
     parser.add_argument("--seed", type=int, default=42, help="Scenario seed (default: 42)")
     parser.add_argument(

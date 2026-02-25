@@ -1,5 +1,5 @@
 """
-ScenarioConfig dataclass + ScenarioGenerator for Phase 2 data collection.
+ScenarioConfig dataclass + ScenarioGenerator for synthetic data collection.
 
 Each scenario is deterministically reproducible from a single integer seed.
 ScenarioGenerator.sample(seed) draws all parameters from seeded random, then

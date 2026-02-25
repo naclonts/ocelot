@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""sim/collect_data.py — Phase 2 Step 7 data collection pipeline.
+"""sim/collect_data.py — data collection pipeline.
 
 Drives sequential simulation episodes, captures synchronized (frame, label,
 velocity) tuples from the running oracle, and writes compressed HDF5 episode
@@ -387,7 +387,7 @@ def run_collection(node: CollectNode, args) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Phase 2 Step 7 — data collection pipeline."
+        description="Sim data collection pipeline."
     )
     parser.add_argument(
         "--n_episodes", type=int, required=True,

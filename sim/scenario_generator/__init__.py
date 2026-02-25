@@ -1,8 +1,9 @@
 """
-Scenario generator for Phase 2 synthetic data collection.
+Scenario generator for synthetic data collection.
 
-Modules (built incrementally in Step 6):
+Modules:
   face_descriptions  — generate AI image-gen prompts for face texture variety
-  scenarios          — (TODO) dataclass + randomizer for full Gazebo scenarios
-  apply              — (TODO) apply a scenario config to a live Gazebo instance
+  scenario           — dataclass + randomizer for full Gazebo scenarios
+  gazebo_bridge      — apply a scenario config to a live Gazebo instance
+  episode_runner     — orchestrate motion patterns across an episode
 """

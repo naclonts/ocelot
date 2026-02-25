@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""sim/check_dataset.py — Phase 2 Step 7 dataset quality check.
+"""sim/check_dataset.py — dataset quality check.
 
 Reads a collected dataset directory and verifies integrity, label distribution,
 velocity variance, frame shapes, and scenario-id uniqueness.
@@ -195,7 +195,7 @@ def check_dataset(dataset_dir: Path, sample_frames: int = 0) -> bool:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Phase 2 Step 7 — dataset quality check."
+        description="Dataset quality check."
     )
     parser.add_argument(
         "--dataset", required=True,

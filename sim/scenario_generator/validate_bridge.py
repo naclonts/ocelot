@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-End-to-end validation for GazeboBridge (Step F acceptance test).
+End-to-end validation for GazeboBridge.
 
 Requires a running Gazebo instance with scenario_world loaded:
     ros2 launch ocelot sim_launch.py world:=scenario_world headless:=true

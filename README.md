@@ -93,8 +93,8 @@ ros2 run ocelot oracle_validator
 #### Episode runner (scenario generator)
 
 The episode runner generates randomized scenarios — face textures, background, lighting, motion
-patterns, language labels — and drives them in a live Gazebo session. Use it to smoke-test Step 6
-before running the full data collection (Step 7).
+patterns, language labels — and drives them in a live Gazebo session. Use it to smoke-test the
+scenario generator before running full data collection.
 
 **Prerequisites** (assets must exist before running):
 
@@ -138,7 +138,7 @@ gz model --list   # should show only: ground_plane, ocelot
 gz light --list   # should be empty
 ```
 
-#### Data collection (Step 7)
+#### Data collection
 
 Collect synchronized (frame, language label, pan_vel, tilt_vel) episodes from the running oracle and write them as compressed HDF5 files.
 
@@ -168,7 +168,7 @@ docker exec -e ROS_DOMAIN_ID=1 ocelot-sim \
   python3 /ws/src/ocelot/sim/check_dataset.py --dataset /ws/src/ocelot/dataset
 ```
 
-For parallel sharding (Step 9), run multiple collectors with non-overlapping `--base_seed` and `--base_ep` ranges, each writing to a separate output directory.
+For parallel sharding, run multiple collectors with non-overlapping `--base_seed` and `--base_ep` ranges, each writing to a separate output directory.
 
 ---
 
@@ -304,7 +304,7 @@ deadsnakes Python 3.11 on Ubuntu 24.04 (Noble) does not bundle the pip wheel use
 If the `.venv` was created by the host's Pi OS Python 3.11 (outside the container), delete it and recreate inside the container:
 ```bash
 rm -rf .venv
-# then re-run step 2 of First time setup
+# then re-run the venv + colcon build step from First time setup above
 ```
 
 ### `pip dependency resolver` warning about `pyyaml` / `launch-ros`
