@@ -21,9 +21,33 @@ collect_data.py (Step 7) owns the ROS subscription loop and calls step() in
 sync with the camera topic.
 """
 
+import logging
 import random
+import subprocess
 
 from sim.scenario_generator.motion import make_motion, RandomWalkMotion
+
+log = logging.getLogger(__name__)
+
+
+def _set_oracle_label_key(label_key: str) -> None:
+    """Forward the episode label_key to /oracle_node via ros2 param set.
+
+    Maps scenario label keys to oracle-understood values:
+        single_slow → "slow"  (oracle halves max_velocity)
+        anything else → "track"
+
+    No-op if the ros2 CLI is unavailable or the oracle node is not running.
+    """
+    oracle_value = "slow" if label_key == "single_slow" else "track"
+    try:
+        subprocess.run(
+            ["ros2", "param", "set", "/oracle_node", "label_key", oracle_value],
+            capture_output=True,
+            timeout=2.0,
+        )
+    except Exception as exc:
+        log.debug("_set_oracle_label_key: could not set param: %s", exc)
 
 # Constant added to config.seed when constructing the episode-runner RNG.
 # Keeps this stream independent from the scenario-generator sampling stream.
@@ -63,6 +87,10 @@ class EpisodeRunner:
         Args:
             config: ScenarioConfig from sim.scenario_generator.scenario.
         """
+        # Tell the oracle node the label for this episode (best-effort; no-op
+        # if oracle is not running or ros2 CLI is unavailable).
+        _set_oracle_label_key(config.label_key)
+
         # Spawn all Gazebo entities (also tears down any previous episode).
         self._bridge.setup_episode(config)
 
@@ -71,9 +99,16 @@ class EpisodeRunner:
         # The offset keeps this stream independent from scenario.py's stream.
         rng = random.Random(config.seed + _RNG_OFFSET)
 
+        # Reorder faces to match bridge ordering: target → face_0, others → face_1, face_2…
+        # Must mirror the reordering done in GazeboBridge.setup_episode().
+        target_idx = config.target_face_idx
+        ordered_faces = [config.faces[target_idx]] + [
+            f for i, f in enumerate(config.faces) if i != target_idx
+        ]
+
         # One motion pattern per face.
         self._face_motions = []
-        for i, face in enumerate(config.faces):
+        for i, face in enumerate(ordered_faces):
             pattern = make_motion(face.motion, face.speed, face.period, rng)
             pattern.reset(face.initial_x, face.initial_y, face.initial_z)
             self._face_motions.append((f"face_{i}", pattern))

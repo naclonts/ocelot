@@ -259,6 +259,34 @@ This is exact inverse kinematics for a 2-DOF serial mechanism — closed-form, n
 
 ---
 
+### Step 5 Design Gap — Label-Conditional Oracle Behaviour
+
+The oracle as implemented always tracks `/model/face_0/pose`, which is always the first
+spawned face regardless of `ScenarioConfig.target_face_idx`.  This must be fixed before
+data collection (Step 7) so that recorded trajectories are consistent with the language label.
+
+**Required changes:**
+
+1. **Correct target tracking** — `gazebo_bridge.py` `setup_episode()` must spawn faces so
+   that the target face (`config.faces[config.target_face_idx]`) is always spawned as
+   `face_0` (the only face with a `PosePublisher` plugin and a ROS pose topic).
+   Non-target faces are spawned as `face_1`, `face_2`, etc.
+
+2. **`follow slowly` label** — oracle should halve `max_velocity` (e.g. 0.5 rad/s) when
+   the scenario label key is `slow`.  Pass the label key into the oracle via a ROS parameter
+   or a dedicated topic set by the episode runner before each episode starts.
+
+3. **Static-face episodes** — when the target face has `motion=static`, oracle still tracks
+   (output converges to near-zero naturally once centred).  No special handling needed.
+
+**Not required:** the oracle need not interpret positional or attribute labels (`left`, `right`,
+`hat`, `closest`) — those are encoded in *which face is target*, which is already handled by (1).
+
+**Implementation order:** fix (1) first (correctness), then (2) (label fidelity).  Both must be
+complete before Step 7 data collection begins.
+
+---
+
 ## Step 6 — Scenario Generator and Domain Randomization
 
 **Dir**: `sim/scenario_generator/` — a Python class that generates randomized scenario configurations and applies them to a running Gazebo instance via service calls.

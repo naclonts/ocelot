@@ -196,7 +196,7 @@ class TestBoundsAndDistributions:
         for seed in range(1000):
             cfg = generator.sample(seed)
             for face in cfg.faces:
-                assert 1.0 <= face.initial_x <= 3.0, f"initial_x out of range: {face.initial_x}"
+                assert 2.0 <= face.initial_x <= 4.0, f"initial_x out of range: {face.initial_x}"
                 assert -1.0 <= face.initial_y <= 1.0
                 assert 0.5 <= face.initial_z <= 1.5
                 assert 0.05 <= face.speed <= 0.5
@@ -347,3 +347,176 @@ class TestMotionPatterns:
         m2.reset(2.0, 0.0, 1.0)
         for t in [1, 5, 10, 30, 60]:
             assert m1.step(t) == m2.step(t), f"Mismatch at t={t}"
+
+
+# ---------------------------------------------------------------------------
+# Helpers shared by reordering / label-key tests
+# ---------------------------------------------------------------------------
+
+def _make_scenario_config(faces, target_face_idx=0, label_key="single_centered",
+                           language_label="track the face") -> ScenarioConfig:
+    """Build a minimal ScenarioConfig for testing — no real paths required."""
+    return ScenarioConfig(
+        scenario_id="test",
+        seed=0,
+        faces=faces,
+        target_face_idx=target_face_idx,
+        background_id="plain_white",
+        background_path="/fake/bg.png",
+        lighting_azimuth_deg=45.0,
+        lighting_elevation_deg=45.0,
+        lighting_intensity=1.0,
+        ambient_rgb=(0.5, 0.5, 0.5),
+        distractor_count=0,
+        distractors=[],
+        camera_noise_sigma=0.0,
+        camera_brightness_offset=0.0,
+        label_key=label_key,
+        language_label=language_label,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Face reordering tests — GazeboBridge.setup_episode()
+# ---------------------------------------------------------------------------
+
+class TestSetupEpisodeFaceOrdering:
+    """Verify setup_episode() always spawns the target face as face_0."""
+
+    def _run_setup_episode(self, target_face_idx: int):
+        """Run setup_episode on a 3-face config and return the spawn_face call list."""
+        from unittest.mock import MagicMock
+        from sim.scenario_generator.gazebo_bridge import GazeboBridge
+
+        faces = [
+            _make_face_config(face_id=f"face_{c:03d}", initial_y=float(c))
+            for c in range(3)
+        ]
+
+        bridge = GazeboBridge(world="test_world")
+        bridge.spawn_face = MagicMock(return_value=True)
+        bridge.spawn_background = MagicMock(return_value=True)
+        bridge.spawn_key_light = MagicMock(return_value=True)
+        bridge.spawn_fill_light = MagicMock(return_value=True)
+        bridge.teardown_episode = MagicMock()
+
+        config = _make_scenario_config(faces, target_face_idx=target_face_idx)
+        bridge.setup_episode(config)
+        return bridge.spawn_face.call_args_list, faces
+
+    def test_target_idx_0_spawns_first_as_face0(self):
+        """When target_face_idx=0, face_0 still gets faces[0]'s texture."""
+        calls, faces = self._run_setup_episode(target_face_idx=0)
+        assert calls[0].kwargs["name"] == "face_0"
+        assert calls[0].kwargs["texture_abs_path"] == faces[0].texture_path
+
+    def test_target_idx_1_spawns_as_face0(self):
+        """When target_face_idx=1, face_0 gets faces[1]'s texture."""
+        calls, faces = self._run_setup_episode(target_face_idx=1)
+        assert calls[0].kwargs["name"] == "face_0"
+        assert calls[0].kwargs["texture_abs_path"] == faces[1].texture_path
+
+    def test_target_idx_2_spawns_as_face0(self):
+        """When target_face_idx=2, face_0 gets faces[2]'s texture."""
+        calls, faces = self._run_setup_episode(target_face_idx=2)
+        assert calls[0].kwargs["name"] == "face_0"
+        assert calls[0].kwargs["texture_abs_path"] == faces[2].texture_path
+
+    def test_all_three_faces_spawned(self):
+        """All three faces are spawned regardless of reordering."""
+        calls, _ = self._run_setup_episode(target_face_idx=1)
+        spawned_names = [c.kwargs["name"] for c in calls]
+        assert sorted(spawned_names) == ["face_0", "face_1", "face_2"]
+
+
+# ---------------------------------------------------------------------------
+# Face reordering tests — EpisodeRunner.setup()
+# ---------------------------------------------------------------------------
+
+class TestEpisodeRunnerFaceOrdering:
+    """Verify face_0 motion tracks the target face's initial position."""
+
+    def _run_runner_step0(self, target_face_idx: int):
+        """Setup runner with a 2-face static config and step at t=0."""
+        from unittest.mock import MagicMock, patch
+        from sim.scenario_generator.episode_runner import EpisodeRunner
+
+        mock_bridge = MagicMock()
+        mock_bridge.setup_episode.return_value = None
+        mock_bridge.set_pose.return_value = True
+
+        faces = [
+            _make_face_config("face_001", initial_x=2.0, initial_y=0.5,
+                              motion="static"),
+            _make_face_config("face_002", initial_x=3.0, initial_y=-0.5,
+                              motion="static"),
+        ]
+        config = _make_scenario_config(faces, target_face_idx=target_face_idx)
+
+        runner = EpisodeRunner(mock_bridge)
+        with patch("sim.scenario_generator.episode_runner.subprocess.run"):
+            runner.setup(config)
+        return runner.step(0.0), faces
+
+    def test_face0_is_target_when_idx1(self):
+        """With target_face_idx=1, face_0 motion starts at faces[1]'s position."""
+        positions, faces = self._run_runner_step0(target_face_idx=1)
+        assert positions["face_0"] == (3.0, -0.5, 1.0), (
+            f"face_0 should be target (faces[1]); got {positions['face_0']}"
+        )
+        assert positions["face_1"] == (2.0, 0.5, 1.0), (
+            f"face_1 should be non-target (faces[0]); got {positions['face_1']}"
+        )
+
+    def test_face0_is_target_when_idx0(self):
+        """With target_face_idx=0, face_0 motion starts at faces[0]'s position."""
+        positions, faces = self._run_runner_step0(target_face_idx=0)
+        assert positions["face_0"] == (2.0, 0.5, 1.0), (
+            f"face_0 should be target (faces[0]); got {positions['face_0']}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Oracle label_key mapping tests — EpisodeRunner._set_oracle_label_key
+# ---------------------------------------------------------------------------
+
+class TestEpisodeRunnerLabelKey:
+    """Verify label_key mapping: single_slow → 'slow', others → 'track'."""
+
+    def _setup_runner(self, label_key: str):
+        """Run setup() with the given label_key and return the subprocess.run call."""
+        from unittest.mock import MagicMock, patch
+        from sim.scenario_generator.episode_runner import EpisodeRunner
+
+        mock_bridge = MagicMock()
+        mock_bridge.setup_episode.return_value = None
+
+        face = _make_face_config(motion="sinusoidal", speed=0.1)
+        config = _make_scenario_config([face], label_key=label_key)
+
+        runner = EpisodeRunner(mock_bridge)
+        with patch("sim.scenario_generator.episode_runner.subprocess.run") as mock_run:
+            runner.setup(config)
+        return mock_run.call_args_list
+
+    def test_single_slow_maps_to_slow(self):
+        """label_key='single_slow' → oracle receives 'slow'."""
+        calls = self._setup_runner("single_slow")
+        assert len(calls) == 1
+        cmd = calls[0][0][0]
+        assert "label_key" in cmd
+        assert cmd[-1] == "slow", f"Expected last arg 'slow', got {cmd[-1]!r}"
+
+    def test_single_centered_maps_to_track(self):
+        """label_key='single_centered' → oracle receives 'track'."""
+        calls = self._setup_runner("single_centered")
+        assert len(calls) == 1
+        cmd = calls[0][0][0]
+        assert cmd[-1] == "track", f"Expected last arg 'track', got {cmd[-1]!r}"
+
+    def test_multi_attr_maps_to_track(self):
+        """label_key='multi_attr' → oracle receives 'track'."""
+        calls = self._setup_runner("multi_attr")
+        assert len(calls) == 1
+        cmd = calls[0][0][0]
+        assert cmd[-1] == "track"

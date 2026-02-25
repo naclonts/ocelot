@@ -66,6 +66,7 @@ class OracleNode(Node):
         self.declare_parameter('kp_tilt', 10.0)       # rad/s per radian of tilt error
         self.declare_parameter('max_velocity', 1.0)  # rad/s clamp — must match URDF velocity="1.0"
         self.declare_parameter('deadband_rad', 0.002) # ~0.11° — suppress sub-pixel chatter
+        self.declare_parameter('label_key', 'track')  # 'slow' → halve max_velocity
 
         self._pan_angle: float = 0.0
         self._tilt_angle: float = 0.0
@@ -137,6 +138,8 @@ class OracleNode(Node):
         kp_pan = self.get_parameter('kp_pan').value
         kp_tilt = self.get_parameter('kp_tilt').value
         max_vel = self.get_parameter('max_velocity').value
+        if self.get_parameter('label_key').value == 'slow':
+            max_vel *= 0.5
         deadband = self.get_parameter('deadband_rad').value
 
         twist = Twist()
