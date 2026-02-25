@@ -762,7 +762,7 @@ changes; despawn, verify it's gone. Background and light spawning verified visua
 
 ---
 
-### Step G — Episode runner ❌ TODO
+### Step G — Episode runner ✅ DONE
 
 **Files**: `sim/scenario_generator/episode_runner.py`
 
