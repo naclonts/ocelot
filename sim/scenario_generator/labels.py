@@ -16,45 +16,6 @@ from typing import Optional
 
 LABEL_REGISTRY: dict[str, list[str]] = {
 
-    # ── Single-face conditions ────────────────────────────────────────────────
-
-    "single_centered": [
-        "track the person in the center",
-        "follow the face in front of you",
-        "track the face",
-        "follow them",
-        "keep them centered",
-        "look at the person in front of you",
-        "keep the face in frame",
-    ],
-
-    "single_slow": [
-        "follow slowly",
-        "track gently",
-        "go slow",
-        "take it slow following the face",
-        "follow that person, but slowly",
-        "keep up with them, no rush",
-    ],
-
-    "single_left": [
-        "track the face on the left",
-        "follow the person to the left",
-        "look left",
-        "track left",
-        "the face is on the left — keep it centered",
-        "follow whoever is to your left",
-    ],
-
-    "single_right": [
-        "track the face on the right",
-        "follow the person to the right",
-        "look right",
-        "track right",
-        "the face is on the right — keep it centered",
-        "follow whoever is to your right",
-    ],
-
     # ── Multi-face: distinguishing attribute ──────────────────────────────────
     # {attr} is substituted at generation time.
 
@@ -198,34 +159,19 @@ def assign_label(
 
     Returns (label_key, language_label).
 
-    Priority (first match wins):
-      Multi-face:
+    Single-face: always returns ("track", "track the face") — no disambiguation needed.
+
+    Multi-face priority (first match wins):
         1. multi_attr    — target has distinguishing hat/glasses/beard
         2. multi_left    — target is leftmost (min initial_y)
            multi_right   — target is rightmost (max initial_y)
-        3. multi_closest — target has smallest initial_x (fallback)
-      Single-face:
-        4. single_slow   — speed < 0.15 m/s AND motion != static
-        5. single_left   — initial_y < -0.3 m (face to camera's left)
-           single_right  — initial_y >  0.3 m (face to camera's right)
-        6. single_centered — all other cases (including static faces)
+        3. multi_closest — fallback
     """
     target = faces[target_idx]
     n = len(faces)
 
     if n == 1:
-        face = faces[0]
-        # 4. Slow-moving
-        if face.motion != "static" and face.speed < 0.15:
-            key = "single_slow"
-        # 5. Off-centre (only meaningful for moving faces; static → centered)
-        elif face.motion != "static" and abs(face.initial_y) > 0.3:
-            key = "single_left" if face.initial_y < 0 else "single_right"
-        # 6. Fallback (also covers all static faces)
-        else:
-            key = "single_centered"
-        template = rng.choice(LABEL_REGISTRY[key])
-        return key, template
+        return "track", "track the face"
 
     # Multi-face ──────────────────────────────────────────────────────────────
 

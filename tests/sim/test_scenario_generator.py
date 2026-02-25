@@ -141,31 +141,28 @@ class TestLabels:
             f"Expected hat-related label, got: {label!r}"
         )
 
-    def test_label_correctness_slow(self):
-        """Single face, speed=0.1, motion=sinusoidal → single_slow."""
-        face = _make_face_config(motion="sinusoidal", speed=0.1)
+    def test_single_face_always_track(self):
+        """Single face always returns ('track', 'track the face') regardless of speed/position."""
         rng = random.Random(0)
-        key, label = assign_label([face], 0, {}, rng)
-        assert key == "single_slow", f"Expected single_slow, got {key!r}"
-
-    def test_label_correctness_left(self):
-        """Single face, initial_y=-0.6 (left of camera) → single_left."""
-        face = _make_face_config(initial_y=-0.6, motion="sinusoidal", speed=0.3)
-        rng = random.Random(0)
-        key, label = assign_label([face], 0, {}, rng)
-        assert key == "single_left", f"Expected single_left, got {key!r}"
+        for motion, speed, y in [
+            ("sinusoidal", 0.1, 0.0),   # previously single_slow
+            ("sinusoidal", 0.3, -0.6),  # previously single_left
+            ("static",     0.3,  0.0),  # previously single_centered
+        ]:
+            face = _make_face_config(motion=motion, speed=speed, initial_y=y)
+            key, label = assign_label([face], 0, {}, rng)
+            assert key == "track", f"Expected 'track', got {key!r}"
+            assert label == "track the face"
 
     def test_label_coverage(self, generator):
-        """500 samples must cover all 8 label keys at least once."""
-        all_keys = set(LABEL_REGISTRY.keys())
+        """500 samples must cover all 4 multi-face label keys at least once."""
+        multi_keys = set(LABEL_REGISTRY.keys())  # only multi_* keys remain
         covered = set()
         for seed in range(500):
             cfg = generator.sample(seed)
             covered.add(cfg.label_key)
-            if covered >= all_keys:
-                break
-        assert len(covered) >= 6, (
-            f"Expected ≥6 label keys covered, got {len(covered)}: {covered}"
+        assert multi_keys <= covered, (
+            f"Multi-face keys not fully covered: missing {multi_keys - covered}"
         )
 
     def test_multi_attr_priority(self):
