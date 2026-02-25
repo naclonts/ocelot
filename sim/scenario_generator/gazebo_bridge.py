@@ -97,11 +97,11 @@ _BACKGROUND_SDF = """\
 <sdf version="1.10">
   <model name="background_wall">
     <static>true</static>
-    <pose>6 0 1.5 0 0 0</pose>
+    <pose>5 0 0 0 0 0</pose>
     <link name="link">
       <visual name="wall_visual">
         <geometry>
-          <box><size>0.002 12.0 6.0</size></box>
+          <box><size>0.002 12.0 12.0</size></box>
         </geometry>
         <material>
           <ambient>1.0 1.0 1.0 1</ambient>
@@ -346,7 +346,7 @@ class GazeboBridge:
 
         Position: same elevation as the key light, azimuth rotated 180°.
         Diffuse = ambient_rgb — tints the scene fill with the sampled ambient colour.
-        Intensity is fixed at 0.6, always softer than the key light (0.5–2.0 range).
+        Intensity is fixed at 0.6, always softer than the key light (0.5-2.0 range).
         Despawns any previous fill light first.
         """
         name = "episode_light_fill"

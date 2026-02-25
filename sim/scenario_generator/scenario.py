@@ -153,7 +153,7 @@ class ScenarioGenerator:
             faces.append(FaceConfig(
                 face_id=fid,
                 texture_path=texture_path,
-                initial_x=rng.uniform(1.0, 3.0),
+                initial_x=rng.uniform(2.0, 4.0),
                 initial_y=rng.uniform(-1.0, 1.0),
                 initial_z=rng.uniform(0.5, 1.5),
                 motion=rng.choices(
