@@ -127,11 +127,22 @@ _SHIRT_TYPE = [
 ]
 
 _SHIRT_COLOR = [
-    ("red",   "red",   1),
-    ("blue",  "blue",  1),
-    ("green", "green", 1),
-    ("black", "black", 1),
-    ("white", "white", 1),
+    ("red",        "red",         1),
+    ("blue",       "blue",        1),
+    ("green",      "green",       1),
+    ("black",      "black",       1),
+    ("white",      "white",       1),
+    ("navy",       "navy",        1),
+    ("gray",       "gray",        1),
+    ("yellow",     "yellow",      1),
+    ("orange",     "orange",      1),
+    ("purple",     "purple",      1),
+    ("pink",       "pink",        1),
+    ("teal",       "teal",        1),
+    ("maroon",     "maroon",      1),
+    ("olive",      "olive",       1),
+    ("brown",      "brown",       1),
+    ("coral",      "coral",       1),
 ]
 
 # Over-clothing accessories — None = nothing (higher weight)
