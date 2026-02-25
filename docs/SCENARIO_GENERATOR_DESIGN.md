@@ -741,7 +741,7 @@ Implement the four pattern classes from §7. Each must:
 
 ---
 
-### Step F — Gazebo bridge ❌ TODO
+### Step F — Gazebo bridge ✅ DONE
 
 **Files**: `sim/scenario_generator/gazebo_bridge.py`
 
