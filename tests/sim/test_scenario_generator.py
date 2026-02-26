@@ -97,6 +97,12 @@ def generator(tmp_path) -> ScenarioGenerator:
 
     (faces_dir / "face_descriptions_001.json").write_text(json.dumps(faces))
 
+    # Create dummy PNG assets so ScenarioGenerator's existence filter passes.
+    assets_dir = tmp_path / "assets" / "faces"
+    assets_dir.mkdir(parents=True)
+    for i in range(20):
+        (assets_dir / f"face_{i+1:03d}.png").write_bytes(b"")
+
     # Minimal backgrounds manifest
     manifest = [
         {"id": "plain_white",    "tags": ["plain"],   "file": "plain_white.png"},
@@ -202,8 +208,11 @@ class TestBoundsAndDistributions:
             assert 0 <= cfg.lighting_azimuth_deg <= 360
             assert 15 <= cfg.lighting_elevation_deg <= 75
             assert 0.5 <= cfg.lighting_intensity <= 2.0
+            for ch in cfg.key_color_rgb:
+                assert 0.85 <= ch <= 1.0
             for ch in cfg.ambient_rgb:
                 assert 0.2 <= ch <= 0.8
+            assert 0.2 <= cfg.fill_intensity <= 0.9
             assert 0 <= cfg.distractor_count <= 2
             assert len(cfg.distractors) == cfg.distractor_count
             for dist in cfg.distractors:
@@ -363,7 +372,9 @@ def _make_scenario_config(faces, target_face_idx=0, label_key="single_centered",
         lighting_azimuth_deg=45.0,
         lighting_elevation_deg=45.0,
         lighting_intensity=1.0,
+        key_color_rgb=(1.0, 1.0, 1.0),
         ambient_rgb=(0.5, 0.5, 0.5),
+        fill_intensity=0.6,
         distractor_count=0,
         distractors=[],
         camera_noise_sigma=0.0,

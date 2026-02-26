@@ -52,7 +52,9 @@ class ScenarioConfig:
     lighting_azimuth_deg:     float  # [0–360]
     lighting_elevation_deg:   float  # [15–75]
     lighting_intensity:       float  # [0.5–2.0]
-    ambient_rgb:              tuple  # (r, g, b) each [0.2–0.8]
+    key_color_rgb:            tuple  # (r, g, b) each [0.85–1.0] — subtle warm/cool tint
+    ambient_rgb:              tuple  # (r, g, b) each [0.2–0.8] — fill light color
+    fill_intensity:           float  # [0.2–0.9] — independent key-to-fill ratio
     distractor_count:         int    # [0–2]
     distractors:              list   # list[DistractorConfig]
     camera_noise_sigma:       float  # [0.0–0.015]
@@ -79,6 +81,9 @@ class ScenarioConfig:
             for dist in d["distractors"]
         ]
         d["ambient_rgb"] = tuple(d["ambient_rgb"])
+        d.setdefault("key_color_rgb", (1.0, 1.0, 1.0))
+        d["key_color_rgb"] = tuple(d["key_color_rgb"])
+        d.setdefault("fill_intensity", 0.6)
         return cls(**d)
 
 
@@ -103,21 +108,26 @@ class ScenarioGenerator:
         faces_dir = Path(faces_dir)
         backgrounds_dir = Path(backgrounds_dir)
 
-        # Glob all face_descriptions*.json and merge into one pool.
-        self._faces: list[dict] = []
+        # Glob all face_descriptions*.json, merge, and deduplicate by face_id
+        # (face_descriptions_003.json is a superset that overlaps earlier files).
+        faces_assets_dir = faces_dir.parent / "assets" / "faces"
+        seen_ids: set[str] = set()
+        raw_faces: list[dict] = []
         for p in sorted(faces_dir.glob("face_descriptions*.json")):
-            self._faces.extend(json.loads(p.read_text()))
-        if not self._faces:
+            for entry in json.loads(p.read_text()):
+                fid = entry["face_id"]
+                if fid not in seen_ids:
+                    seen_ids.add(fid)
+                    raw_faces.append(entry)
+        if not raw_faces:
             raise ValueError(f"No face_descriptions*.json found in {faces_dir}")
-        # TODO: remove cap once face_101–face_200 images are generated.
-        if len(self._faces) > 100:
-            import warnings
-            warnings.warn(
-                "Face pool capped at 100 — face_101+ images not yet generated. "
-                "Run generate_face_images.py for the full set and remove this cap.",
-                stacklevel=2,
-            )
-        self._faces = self._faces[:100]
+        # Keep only faces whose PNG asset is present on disk.
+        self._faces: list[dict] = [
+            f for f in raw_faces
+            if (faces_assets_dir / f"{f['face_id']}.png").exists()
+        ]
+        if not self._faces:
+            raise ValueError(f"No face PNG assets found in {faces_assets_dir}")
 
         # Load background manifest. Lives in scenario_generator/ (git-tracked),
         # not in assets/ (DVC-tracked), so it's available after a plain git clone.
@@ -131,7 +141,7 @@ class ScenarioGenerator:
                                    "file": "plain_white.png"}]
 
         self._backgrounds_dir = backgrounds_dir
-        self._faces_assets_dir = faces_dir.parent / "assets" / "faces"
+        self._faces_assets_dir = faces_assets_dir
 
     def sample(self, seed: int) -> "ScenarioConfig":
         from sim.scenario_generator.labels import assign_label  # lazy import avoids cycles
@@ -176,11 +186,19 @@ class ScenarioGenerator:
         lighting_azimuth_deg   = rng.uniform(0, 360)
         lighting_elevation_deg = rng.uniform(15, 75)
         lighting_intensity     = rng.uniform(0.5, 2.0)
+        # Subtle warm/cool tint on the key light — each channel [0.85, 1.0]
+        # so the deviation from pure white is at most 0.15 per channel.
+        key_color_rgb = (
+            rng.uniform(0.85, 1.0),
+            rng.uniform(0.85, 1.0),
+            rng.uniform(0.85, 1.0),
+        )
         ambient_rgb = (
             rng.uniform(0.2, 0.8),
             rng.uniform(0.2, 0.8),
             rng.uniform(0.2, 0.8),
         )
+        fill_intensity = rng.uniform(0.2, 0.9)
 
         # ── Distractors ──────────────────────────────────────────────────────
         distractor_count = rng.randint(0, 2)
@@ -219,7 +237,9 @@ class ScenarioGenerator:
             "lighting_azimuth_deg": lighting_azimuth_deg,
             "lighting_elevation_deg": lighting_elevation_deg,
             "lighting_intensity": lighting_intensity,
+            "key_color_rgb": list(key_color_rgb),
             "ambient_rgb": list(ambient_rgb),
+            "fill_intensity": fill_intensity,
             "distractor_count": distractor_count,
             "distractors": [asdict(d) for d in distractors],
             "camera_noise_sigma": camera_noise_sigma,
@@ -241,7 +261,9 @@ class ScenarioGenerator:
             lighting_azimuth_deg=lighting_azimuth_deg,
             lighting_elevation_deg=lighting_elevation_deg,
             lighting_intensity=lighting_intensity,
+            key_color_rgb=key_color_rgb,
             ambient_rgb=ambient_rgb,
+            fill_intensity=fill_intensity,
             distractor_count=distractor_count,
             distractors=distractors,
             camera_noise_sigma=camera_noise_sigma,

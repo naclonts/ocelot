@@ -410,8 +410,12 @@ def main() -> None:
         help="Output directory for dataset files.",
     )
     parser.add_argument(
-        "--base_seed", type=int, default=0,
-        help="Seed offset: episode i uses seed base_seed + i.  Default: 0.",
+        "--base_seed", type=int, default=None,
+        help=(
+            "Seed offset: episode i uses seed base_seed + i. "
+            "With --shard, defaults to shard*n_episodes; override here to "
+            "continue from a specific seed (e.g. last_seed + 1)."
+        ),
     )
     parser.add_argument(
         "--base_ep", type=int, default=0,
@@ -421,19 +425,22 @@ def main() -> None:
         "--shard", type=int, default=None,
         help=(
             "Shard index for parallel collection. "
-            "Sets base_ep=shard*n_episodes and base_seed=shard*n_episodes, "
-            "and writes to <output>/shard_<N>/. "
-            "Cannot be combined with --base_ep or --base_seed."
+            "Sets base_ep=shard*n_episodes and writes to <output>/shard_<N>/. "
+            "base_seed defaults to shard*n_episodes unless --base_seed is given. "
+            "Cannot be combined with --base_ep."
         ),
     )
     args = parser.parse_args()
 
     if args.shard is not None:
-        if args.base_ep != 0 or args.base_seed != 0:
-            parser.error("--shard cannot be combined with --base_ep or --base_seed")
-        args.base_ep   = args.shard * args.n_episodes
-        args.base_seed = args.shard * args.n_episodes
-        args.output    = str(Path(args.output) / f"shard_{args.shard}")
+        if args.base_ep != 0:
+            parser.error("--shard cannot be combined with --base_ep")
+        args.base_ep = args.shard * args.n_episodes
+        if args.base_seed is None:
+            args.base_seed = args.shard * args.n_episodes
+        args.output = str(Path(args.output) / f"shard_{args.shard}")
+    if args.base_seed is None:
+        args.base_seed = 0
 
     rclpy.init()
     node = CollectNode()

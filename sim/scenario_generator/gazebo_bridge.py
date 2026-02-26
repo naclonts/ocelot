@@ -121,7 +121,7 @@ _LIGHT_SDF = """\
 <sdf version="1.10">
   <light type="point" name="{name}">
     <pose>{x} {y} {z} 0 0 0</pose>
-    <diffuse>1 1 1 1</diffuse>
+    <diffuse>{r} {g} {b} 1</diffuse>
     <specular>0.1 0.1 0.1 1</specular>
     <intensity>{intensity}</intensity>
     <attenuation>
@@ -140,7 +140,7 @@ _FILL_LIGHT_SDF = """\
     <pose>{x} {y} {z} 0 0 0</pose>
     <diffuse>{r} {g} {b} 1</diffuse>
     <specular>0.05 0.05 0.05 1</specular>
-    <intensity>0.6</intensity>
+    <intensity>{intensity}</intensity>
     <attenuation>
       <range>20</range>
       <constant>0.2</constant>
@@ -308,7 +308,11 @@ class GazeboBridge:
         return self._spawn_sdf(sdf, _ENTITY_MODEL, "background_wall")
 
     def spawn_key_light(
-        self, azimuth_deg: float, elevation_deg: float, intensity: float
+        self,
+        azimuth_deg: float,
+        elevation_deg: float,
+        intensity: float,
+        key_color_rgb: tuple = (1.0, 1.0, 1.0),
     ) -> bool:
         """Spawn a point light at a hemisphere position above the scene.
 
@@ -318,53 +322,63 @@ class GazeboBridge:
             y = r * cos(el) * sin(az)
             z = r * sin(el)
 
-        Diffuse = intensity × white; range 20 m; no shadow casting.
+        Diffuse = key_color_rgb × intensity; range 20 m; no shadow casting.
+        key_color_rgb is a (r, g, b) tint with each channel in [0.85, 1.0]
+        for subtle warm/cool variation.
         Despawns any previous key light first.
         """
         name = "episode_light_key"
         if name in self._spawned:
             self.despawn(name)
 
-        r = 6.0
+        radius = 6.0
         az = math.radians(azimuth_deg)
         el = math.radians(elevation_deg)
-        x = r * math.cos(el) * math.cos(az) + 1.5
-        y = r * math.cos(el) * math.sin(az)
-        z = r * math.sin(el)
+        x = radius * math.cos(el) * math.cos(az) + 1.5
+        y = radius * math.cos(el) * math.sin(az)
+        z = radius * math.sin(el)
 
+        kr, kg, kb = key_color_rgb
         sdf = _LIGHT_SDF.format(
             name=name,
             x=x, y=y, z=z,
+            r=kr, g=kg, b=kb,
             intensity=intensity,
         )
         return self._spawn_sdf(sdf, _ENTITY_LIGHT, name)
 
     def spawn_fill_light(
-        self, azimuth_deg: float, elevation_deg: float, ambient_rgb: tuple
+        self,
+        azimuth_deg: float,
+        elevation_deg: float,
+        ambient_rgb: tuple,
+        fill_intensity: float = 0.6,
     ) -> bool:
         """Spawn a soft fill light on the hemisphere opposite the key light.
 
         Position: same elevation as the key light, azimuth rotated 180°.
         Diffuse = ambient_rgb — tints the scene fill with the sampled ambient colour.
-        Intensity is fixed at 0.6, always softer than the key light (0.5-2.0 range).
+        fill_intensity [0.2, 0.9] controls the key-to-fill ratio independently
+        of the key light's intensity.
         Despawns any previous fill light first.
         """
         name = "episode_light_fill"
         if name in self._spawned:
             self.despawn(name)
 
-        r = 6.0
+        radius = 6.0
         az = math.radians((azimuth_deg + 180) % 360)
         el = math.radians(elevation_deg)
-        x = r * math.cos(el) * math.cos(az) + 1.5
-        y = r * math.cos(el) * math.sin(az)
-        z = r * math.sin(el)
+        x = radius * math.cos(el) * math.cos(az) + 1.5
+        y = radius * math.cos(el) * math.sin(az)
+        z = radius * math.sin(el)
 
         cr, cg, cb = ambient_rgb
         sdf = _FILL_LIGHT_SDF.format(
             name=name,
             x=x, y=y, z=z,
             r=cr, g=cg, b=cb,
+            intensity=fill_intensity,
         )
         return self._spawn_sdf(sdf, _ENTITY_LIGHT, name)
 
@@ -399,11 +413,13 @@ class GazeboBridge:
             config.lighting_azimuth_deg,
             config.lighting_elevation_deg,
             config.lighting_intensity,
+            getattr(config, "key_color_rgb", (1.0, 1.0, 1.0)),
         )
         self.spawn_fill_light(
             config.lighting_azimuth_deg,
             config.lighting_elevation_deg,
             config.ambient_rgb,
+            getattr(config, "fill_intensity", 0.6),
         )
         # Spawn target face as face_0 so PosePublisher (gated on "face_0") always
         # attaches to the oracle's tracking target regardless of target_face_idx.
