@@ -41,9 +41,18 @@ import base64
 import json
 import os
 import sys
+import threading
 import time
 import uuid as _uuid_mod
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+
+# ---------------------------------------------------------------------------
+# Thread safety
+# ---------------------------------------------------------------------------
+
+_print_lock = threading.Lock()
+
 
 # ---------------------------------------------------------------------------
 # Model / provider constants
@@ -325,6 +334,11 @@ def main():
         help="0-based index of last face to process (exclusive)",
     )
     parser.add_argument(
+        "--workers", "-w", type=int, default=1,
+        help="Number of concurrent worker threads (default: 1, sequential). "
+             "Values of 3-5 work well for Runware; use 1 for OpenAI to avoid rate limits.",
+    )
+    parser.add_argument(
         "--dry-run", action="store_true",
         help="Print what would be generated without calling the API",
     )
@@ -425,25 +439,29 @@ def main():
     generated = 0
     failed    = []
 
+    concurrent = args.workers > 1
+    delay_note = f"  delay={args.delay}s" if not concurrent else f"  workers={args.workers}"
     print(f"Generating {total} face image(s) → {out_dir}")
-    print(f"  model={args.model}  provider={args.provider}  quality={args.quality}  size={args.size} (waist_up→1024x1536)  delay={args.delay}s")
+    print(f"  model={args.model}  provider={args.provider}  quality={args.quality}  size={args.size} (waist_up→1024x1536){delay_note}")
     print()
 
-    for idx, face in enumerate(subset, start=1):
+    def _run_task(face, idx):
+        """Generate one face. Returns ('skip'|'ok'|'fail', face_id)."""
         face_id    = face["face_id"]
         prompt     = face["prompt"]
         crop_level = face.get("crop_level", "")
         size       = "1024x1536" if crop_level == "waist_up" else args.size
         out_path   = out_dir / f"{face_id}.png"
-
-        prefix = f"[{idx:>{len(str(total))}}/{total}] {face_id}"
+        w          = len(str(total))
+        prefix     = f"[{idx:>{w}}/{total}] {face_id}"
 
         if out_path.exists():
-            print(f"{prefix}  SKIP (already exists)")
-            skipped += 1
-            continue
+            with _print_lock:
+                print(f"{prefix}  SKIP (already exists)")
+            return ("skip", face_id)
 
-        print(f"{prefix} [{size}]  generating...", end="", flush=True)
+        with _print_lock:
+            print(f"{prefix} [{size}]  generating...", flush=True)
         t0 = time.monotonic()
 
         try:
@@ -452,17 +470,48 @@ def main():
                 model=args.model, provider=args.provider, size=size, quality=args.quality,
             )
         except Exception as exc:
-            print(f"\n  ERROR: {exc}")
-            failed.append(face_id)
-            continue
+            with _print_lock:
+                print(f"{prefix}  ERROR: {exc}")
+            return ("fail", face_id)
 
         out_path.write_bytes(png_bytes)
         elapsed = time.monotonic() - t0
-        print(f"  done ({elapsed:.1f}s, {len(png_bytes)//1024} KB)")
-        generated += 1
+        with _print_lock:
+            print(f"{prefix}  done ({elapsed:.1f}s, {len(png_bytes)//1024} KB)")
+        return ("ok", face_id)
 
-        if idx < total and args.delay > 0:
-            time.sleep(args.delay)
+    if not concurrent:
+        for idx, face in enumerate(subset, start=1):
+            status, face_id = _run_task(face, idx)
+            if status == "skip":
+                skipped += 1
+            elif status == "ok":
+                generated += 1
+                if idx < total and args.delay > 0:
+                    time.sleep(args.delay)
+            else:
+                failed.append(face_id)
+    else:
+        with ThreadPoolExecutor(max_workers=args.workers) as executor:
+            futures = {
+                executor.submit(_run_task, face, idx): face["face_id"]
+                for idx, face in enumerate(subset, start=1)
+            }
+            for future in as_completed(futures):
+                try:
+                    status, face_id = future.result()
+                except Exception as exc:
+                    face_id = futures[future]
+                    with _print_lock:
+                        print(f"  [{face_id}] unexpected error: {exc}")
+                    failed.append(face_id)
+                    continue
+                if status == "skip":
+                    skipped += 1
+                elif status == "ok":
+                    generated += 1
+                else:
+                    failed.append(face_id)
 
     # ---- Summary ------------------------------------------------------------
     print()

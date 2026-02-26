@@ -113,14 +113,20 @@ class VLAModel(nn.Module):
         # ── Encoders (frozen, permanently in eval mode) ───────────────────
         if pretrained:
             from transformers import AutoModel, CLIPTextModel
-            self.dino      = AutoModel.from_pretrained(self.DINO_ID)
-            self.clip_text = CLIPTextModel.from_pretrained(self.CLIP_ID)
-            # Verify the loaded model produces the expected sequence length.
-            n_patches = (self.dino.config.image_size // self.dino.config.patch_size) ** 2
+            # use_safetensors=True: required by transformers ≥5.2 (CVE-2025-32434
+            # blocks torch.load unless torch ≥2.6; safetensors is unaffected).
+            self.dino      = AutoModel.from_pretrained(self.DINO_ID,  use_safetensors=True)
+            self.clip_text = CLIPTextModel.from_pretrained(self.CLIP_ID, use_safetensors=True)
+            # Verify the loaded model produces the expected sequence length at
+            # the inference image size (224×224), not the training image_size
+            # in the config (DINOv2 is trained at 518×518 but handles any
+            # size via position-embedding interpolation).
+            infer_size = 224
+            n_patches = (infer_size // self.dino.config.patch_size) ** 2
             expected_seq = n_patches + 1  # +1 for CLS
             assert expected_seq == self.VIS_SEQ, (
-                f"DINOv2 config gives {expected_seq} tokens but VIS_SEQ={self.VIS_SEQ}. "
-                f"Update VIS_SEQ to {expected_seq}."
+                f"DINOv2 patch_size={self.dino.config.patch_size} at {infer_size}px "
+                f"gives {expected_seq} tokens but VIS_SEQ={self.VIS_SEQ}."
             )
         else:
             self.dino      = _VisualStub()

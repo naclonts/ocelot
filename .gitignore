@@ -12,6 +12,11 @@ log/
 *.egg-info/
 .env
 
+# Training artifacts (checkpoints, MLflow tracking)
+runs/
+mlruns/
+mlflow.db
+
 # DVC-tracked data (use dvc pull to fetch)
 sim/faces/*.png
 sim/scenario_generator/data/
