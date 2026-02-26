@@ -143,7 +143,14 @@ pytest tests/train/test_dataset.py -v
 
 ---
 
-## Step 2 — VLA Model Architecture
+## Step 2 — VLA Model Architecture ✅ DONE (2026-02-25)
+
+**Status**: Complete. 18/18 tests pass. All tests run on CPU in < 2s (no HuggingFace downloads).
+
+**Key decisions**:
+- Uses `CLIPTextModel` directly (not `CLIPModel`) — avoids loading unused CLIP vision encoder (~200 MB).
+- `pretrained=False` uses lightweight `_VisualStub` / `_TextStub` with one sentinel param each so gradient-freezing tests exercise the frozen/trainable split without any downloads.
+- Text encoder module is named `self.clip_text` (not `self.clip.text_model`) to avoid loading the full CLIPModel.
 
 **File**: `train/model.py`
 
@@ -387,7 +394,8 @@ on the 50k dataset. Use MLflow to compare.
 | N fusion layers    | 1, 2, 4 |
 | Batch size         | 32, 64, 128 |
 
-Total: 27 runs × 5 epochs. Parallelizable if you have multiple GPUs or can use CPU overnight.
+Total: 27 runs × 5 epochs. Run sequentially on a single GPU — launching jobs in parallel
+with `&` will CUDA OOM immediately since all processes compete for the same 8 GB.
 
 ```bash
 for lr in 1e-4 3e-4 1e-3; do
@@ -396,10 +404,9 @@ for lr in 1e-4 3e-4 1e-3; do
         --dataset_dir dataset/ \
         --output_dir runs/sweep/ \
         --epochs 5 --lr $lr --n_fusion_layers $layers \
-        --experiment ocelot-sweep &
+        --experiment ocelot-sweep
   done
 done
-wait
 ```
 
 ### 4b — Full training (v0.1)
@@ -710,17 +717,22 @@ If the eval job fails, the CI marks the commit as failed and blocks any deployme
 
 ### 7c — End-to-end test
 
-Validate CI works by pushing a deliberately bad model (all-zero action head weights):
+Validate CI works by pushing a deliberately bad model (all-zero action head weights).
+Use `export_onnx.py` to produce the file — do not save a PyTorch state dict with an `.onnx`
+extension; `onnxruntime` will reject it immediately.
+
 ```bash
+# 1. Train (or load) a model, then zero the action head in-place before exporting
 python3 -c "
-import train.model, torch
-m = train.model.VLAModel()
-# Zero out the action head
+import train.model, train.export_onnx, torch
+m = train.model.VLAModel(pretrained=True)
 for p in m.action_head.parameters():
     p.data.zero_()
-torch.save(m.state_dict(), 'models/vla_v0.1.onnx')
-# (then export to ONNX and push)
+# export_onnx.export(m, 'models/vla_v0.1.onnx')  # call your export helper
 "
+# 2. Commit the bad ONNX file and push to main
+# 3. Confirm CI eval reports FAIL and blocks the commit
+# 4. Replace with the real v0.1 ONNX and confirm CI reports PASS
 ```
 Confirm CI reports FAIL and blocks the commit. Then push the real v0.1 model and confirm PASS.
 
