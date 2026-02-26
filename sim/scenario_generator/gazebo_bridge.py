@@ -22,6 +22,7 @@ Requires: python3-gz-transport13  python3-gz-msgs10
 
 import logging
 import math
+import time
 
 log = logging.getLogger(__name__)
 
@@ -46,8 +47,9 @@ except ImportError as _exc:
 # Avoids ZMQ teardown / 'Host unreachable' log spam from ephemeral nodes.
 _node = Node() if _GZ_AVAILABLE else None
 
-# Timeout for gz service calls in milliseconds.
-_TIMEOUT_MS = 2000
+# Timeout for gz service calls in milliseconds.  5 s gives headroom under
+# parallel-shard CPU load (software renderer + physics + service handler).
+_TIMEOUT_MS = 5000
 
 # Entity type integers from gz.msgs10.entity_pb2.Entity.Type
 # NONE=0, LIGHT=1, MODEL=2, LINK=3, ...
@@ -238,25 +240,30 @@ class GazeboBridge:
             )
         return result
 
-    def _remove_entity(self, name: str, entity_type: int) -> bool:
-        """Submit a remove request for a named entity."""
+    def _remove_entity(self, name: str, entity_type: int, retries: int = 3) -> bool:
+        """Submit a remove request for a named entity, retrying on timeout.
+
+        Under parallel-shard load, Gazebo's service handler can be temporarily
+        busy; a short sleep + retry succeeds once the handler catches up.
+        """
         if not _GZ_AVAILABLE:
             return True
 
         ent = Entity()
         ent.name = name
         ent.type = entity_type
-        result, _rep = _node.request(
-            self._remove_srv, ent, Entity, Boolean, _TIMEOUT_MS
-        )
-        if result:
-            log.debug("despawned '%s'", name)
-        else:
-            log.warning(
-                "despawn '%s': remove request timed out or returned False",
-                name,
+        for attempt in range(retries):
+            result, _rep = _node.request(
+                self._remove_srv, ent, Entity, Boolean, _TIMEOUT_MS
             )
-        return result
+            if result:
+                log.debug("despawned '%s' (attempt %d)", name, attempt + 1)
+                return True
+            if attempt < retries - 1:
+                log.debug("despawn '%s': timeout, retrying...", name)
+                time.sleep(0.5)
+        log.warning("despawn '%s': failed after %d attempts", name, retries)
+        return False
 
     # ------------------------------------------------------------------
     # Public API
@@ -415,6 +422,10 @@ class GazeboBridge:
         config: ScenarioConfig from sim.scenario_generator.scenario.
         """
         self.teardown_episode()
+        # Give Gazebo time to flush pending removals before spawning new
+        # entities.  Without this, rapid teardown→setup cycles can queue
+        # removals and spawns out of order, causing name conflicts.
+        time.sleep(0.3)
 
         self.spawn_background(config.background_path)
         self.spawn_key_light(
