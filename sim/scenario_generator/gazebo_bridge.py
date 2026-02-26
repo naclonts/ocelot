@@ -77,7 +77,10 @@ _FACE_SDF = """\
       <visual name="face_visual">
         <cast_shadows>false</cast_shadows>
         <geometry>
-          <box><size>0.002 0.5 0.5</size></box>
+          <plane>
+            <normal>-1 0 0</normal>
+            <size>0.5 0.5</size>
+          </plane>
         </geometry>
         <material>
           <ambient>1 1 1 1</ambient>
