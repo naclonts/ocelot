@@ -146,9 +146,6 @@ gz light --list   # should be empty
 ```bash
 # Fresh dataset — 4 shards × 100 episodes
 bash sim/data_gen/collect_parallel.sh --shards 4 --episodes 100
-
-# Custom output path
-bash sim/data_gen/collect_parallel.sh --shards 4 --episodes 100 --output /data/dataset
 ```
 
 The script auto-detects the next unused shard index from the output directory, so re-running
@@ -160,6 +157,17 @@ After collection, verify a shard:
 docker exec -e ROS_DOMAIN_ID=1 ocelot-sim-0 \
   python3 /ws/src/ocelot/sim/data_gen/check_dataset.py --dataset /ws/src/ocelot/sim/dataset/shard_0
 ```
+
+Then merge all shards into one dataset **on the host** (not inside a container — merge only needs h5py from `.venv`):
+
+```bash
+source .venv/bin/activate
+python3 sim/data_gen/merge_shards.py \
+    --parent sim/dataset \
+    --output sim/dataset/merged
+```
+
+`collect_parallel.sh` runs this automatically at the end of a full run. If containers were killed early, run it manually. The merger auto-discovers all `shard_N/` directories, deduplicates episode IDs across shards, regenerates train/val/test splits, and writes `sim/dataset/merged/`.
 
 #### Training
 

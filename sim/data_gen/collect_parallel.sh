@@ -36,7 +36,8 @@ done
 # detection we need the host-side equivalent, derived by stripping the
 # container mount prefix and prepending the repo root.
 REPO_ROOT=$(cd "$(dirname "$0")/../.." && pwd)
-HOST_OUTPUT="${REPO_ROOT}${OUTPUT#/ws/src/ocelot}"
+HOST_OUTPUT="${REPO_ROOT}/sim/dataset"
+echo "HOST_OUTPUT directory: $HOST_OUTPUT"
 
 if [[ -z "$START_SHARD" ]]; then
     START_SHARD=0
@@ -84,12 +85,14 @@ done
 echo "Collecting — waiting for all shards to finish ..."
 wait
 
-# ── Merge ─────────────────────────────────────────────────────────────────────
+# ── Merge (runs on host, not in container) ────────────────────────────────────
+# merge_shards.py only needs h5py, which is in .venv.  Running on the host
+# avoids the container path / bind-mount confusion that arises when OUTPUT
+# differs from the default /ws/src/ocelot/sim/dataset.
 echo "Merging shards ..."
-docker exec "ocelot-sim-${START_SHARD}" bash -c "
-  source /opt/ros/jazzy/setup.bash && source /ws/install/setup.bash &&
-  python3 /ws/src/ocelot/sim/data_gen/merge_shards.py \
-    --parent ${OUTPUT} \
-    --output ${OUTPUT}/merged"
+source "${REPO_ROOT}/.venv/bin/activate"
+python3 "${REPO_ROOT}/sim/data_gen/merge_shards.py" \
+    --parent "${HOST_OUTPUT}" \
+    --output "${HOST_OUTPUT}/merged"
 
-echo "Done. Dataset at ${OUTPUT}/merged"
+echo "Done. Dataset at ${HOST_OUTPUT}/merged"
