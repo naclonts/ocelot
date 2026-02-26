@@ -6,8 +6,11 @@ build an automated sim evaluation framework, and wire it into CI — so no bad m
 **When to run**: Phase 2 is complete when `check_dataset.py` passes on ≥ 50k episodes, all label
 types appear at ≥ 5%, and `dvc pull` reproduces the dataset from a clean checkout.
 
-**Where to run**: Training runs on the **dev machine** (Debian Bookworm x86_64). The sim container
-handles headless evaluation. The Pi remains the deployment target for Phase 4.
+**Where to run**: Training runs on the **dev machine** (Debian Bookworm x86_64, RTX 2070 8GB,
+CUDA 12.2). The sim container handles headless evaluation. The Pi remains the deployment target
+for Phase 4.
+
+As you complete work, update this doc. Also these are all just guides, not requirements. Use judgement at each step and follow best practices.
 
 ---
 
@@ -64,7 +67,12 @@ dvc push
 
 ---
 
-## Step 1 — PyTorch Environment and DataLoader
+## Step 1 — PyTorch Environment and DataLoader ✅ DONE (2026-02-25)
+
+**Status**: Complete. 13/13 tests pass. Dataset loads 400 real episodes (32k train / 4k val / 4k test frames).
+
+**Note on dataset size**: 100 episodes/shard × 4 shards = 400 total episodes. P2-Step 8 (50k) was skipped
+to start Phase 3 early with the existing 400-episode set. Scale up data collection before v0.1 full training.
 
 Set up the training environment on the **host dev machine** (not in the sim container).
 The host already has a `.venv` — extend it rather than creating a new one.
@@ -73,10 +81,13 @@ The host already has a `.venv` — extend it rather than creating a new one.
 
 ```bash
 source .venv/bin/activate
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
-# CPU-only fallback (no GPU on dev machine):
-pip install torch torchvision
+# RTX 2070 + CUDA 12.2 driver → use cu121 wheel (latest CUDA 12.x wheel that works)
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
 pip install transformers mlflow onnx onnxruntime pytest h5py numpy tqdm
+
+# Verify GPU is visible
+python3 -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))"
+# Expected: True, NVIDIA GeForce RTX 2070
 ```
 
 Add a `requirements-train.txt` with pinned versions for reproducibility.
@@ -140,13 +151,13 @@ The architecture has four components. Two are frozen pretrained encoders. Two ar
 
 ```
  ┌─────────────────────────────────────────────────────────┐
- │  Input: frame (3,224,224) + language command (string)  │
- └───────────────┬──────────────────────────┬─────────────┘
+ │  Input: frame (3,224,224) + language command (string)   │
+ └───────────────┬──────────────────────────┬──────────────┘
                  │                          │
         ┌────────▼────────┐       ┌─────────▼─────────┐
         │   DINOv2-small  │       │   CLIP text enc.  │
         │   (21M params)  │       │   (63M params)    │
-        │   FROZEN        │       │   FROZEN           │
+        │   FROZEN        │       │   FROZEN          │
         └────────┬────────┘       └─────────┬─────────┘
                  │                          │
          (257, 384) tokens          (77, 512) → project →
@@ -279,12 +290,27 @@ train/train.py
   --dataset_dir DATASET_DIR   # path to dataset/ with episodes/ and *.txt splits
   --output_dir  OUTPUT_DIR    # where to save checkpoints and MLflow artifacts
   --epochs      N             # default 10
-  --batch_size  B             # default 64
+  --batch_size  B             # default 64 (fits in 8GB VRAM with fp32; try 128 with amp)
   --lr          LR            # default 3e-4
   --n_fusion_layers N         # default 2
   --n_heads     N             # default 6
+  --amp                       # flag: use mixed precision (fp16) — halves VRAM, ~2× faster
   --experiment  NAME          # MLflow experiment name
 ```
+
+The training loop should move everything to GPU:
+```python
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model = model.to(device)
+# In the batch loop:
+frames = frames.to(device)
+targets = targets.to(device)
+input_ids = tokens["input_ids"].to(device)
+attention_mask = tokens["attention_mask"].to(device)
+```
+
+Use `torch.cuda.amp.autocast()` + `GradScaler` when `--amp` is set — with 8GB VRAM
+this lets you run batch size 128 comfortably and cuts per-epoch time roughly in half.
 
 Training loop outline:
 ```python
@@ -758,7 +784,7 @@ Before calling Phase 3 complete:
 |---|---|
 | DINOv2 features don't generalize to Gazebo-rendered faces | Aggressive domain randomization from Phase 2 is the primary defense. If val_loss is stuck at >0.1 after 10 epochs, add LoRA fine-tuning of DINOv2 layers (Phase 4 option). |
 | CLIP text encoder doesn't discriminate well between label types | Check per-label-type MSE in MLflow. If "follow the person on the left" and "follow the person on the right" have identical MSE, the text encoder isn't being used. Add a text-ablation run (random text tokens) to confirm the model uses language. |
-| Training too slow on CPU-only dev machine | DINOv2+CLIP forward passes are expensive. Use `torch.no_grad()` for frozen encoders, precompute frozen encoder outputs for the full dataset and cache as tensors. Precomputation turns the frozen encoders into a one-time offline cost. |
+| Training bottlenecked by DataLoader I/O | With RTX 2070 the GPU is fast enough that disk I/O may become the bottleneck at 5M frames. Set `num_workers=4` in DataLoader. If still bottlenecked, precompute frozen DINOv2+CLIP encoder outputs for the full dataset once and cache as tensors — the frozen encoders become a one-time offline cost and the training loop only trains the fusion+head. |
 | ONNX export fails due to dynamic control flow | Avoid Python conditionals that depend on tensor values inside the model. Use `torch.where` instead of `if`. Test export with `dynamo=True` if standard export fails. |
 | Offline eval MSE doesn't correlate with real tracking quality | After Phase 3, verify in Phase 4 by running the ONNX node live in sim and measuring pixel tracking error. If the correlation is low, replace offline eval with online eval (requires headless Gazebo in CI). |
 

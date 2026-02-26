@@ -1,0 +1,17 @@
+# Training dependencies for Phase 3 VLA model
+# Install with:
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+#   pip install -r requirements-train.txt
+#
+# GPU: RTX 2070 8GB, CUDA 12.2 driver (cu121 wheel is compatible)
+
+torch==2.5.1+cu121
+torchvision==0.20.1+cu121
+transformers==5.2.0
+mlflow==3.10.0
+onnx==1.20.1
+onnxruntime==1.24.2
+h5py==3.15.1
+tqdm==4.67.3
+numpy==2.4.2
+pytest
