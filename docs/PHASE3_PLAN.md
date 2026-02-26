@@ -398,25 +398,52 @@ Total: 27 runs × 5 epochs. Run sequentially on a single GPU — launching jobs 
 with `&` will CUDA OOM immediately since all processes compete for the same 8 GB.
 
 ```bash
+cd /home/nathan/projects/ocelot
+source .venv/bin/activate
+
 for lr in 1e-4 3e-4 1e-3; do
   for layers in 1 2 4; do
-    python3 train/train.py \
-        --dataset_dir dataset/ \
-        --output_dir runs/sweep/ \
-        --epochs 5 --lr $lr --n_fusion_layers $layers \
-        --experiment ocelot-sweep
+    for bs in 32 64 128; do
+      python3 train/train.py \
+          --dataset_dir sim/dataset/ \
+          --output_dir runs/sweep/lr${lr}_l${layers}_bs${bs}/ \
+          --epochs 5 \
+          --lr $lr \
+          --n_fusion_layers $layers \
+          --batch_size $bs \
+          --amp \
+          --num_workers 8 \
+          --experiment ocelot-sweep
+    done
   done
 done
 ```
 
+View results when done:
+
+```bash
+source .venv/bin/activate
+mlflow ui --host 127.0.0.1 --port 5000
+# open http://localhost:5000 → experiment "ocelot-sweep", sort by val_loss ascending
+```
+
 ### 4b — Full training (v0.1)
 
-Train the best config from the sweep on all 50k episodes for 20 epochs. Use cosine LR
-schedule and gradient clipping:
+Train the best config from the sweep on the full available dataset for 20 epochs.
+Cosine LR schedule and gradient clipping are already implemented in `train.py`.
 
-```python
-scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_epochs)
-torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+```bash
+# Replace lr, layers, bs with the best values from the sweep
+python3 train/train.py \
+    --dataset_dir sim/dataset/ \
+    --output_dir runs/v0.1/ \
+    --epochs 20 \
+    --lr 3e-4 \
+    --n_fusion_layers 2 \
+    --batch_size 64 \
+    --amp \
+    --num_workers 4 \
+    --experiment ocelot-v0.1
 ```
 
 The trained model is `v0.1`. Tag in git and log to MLflow.
