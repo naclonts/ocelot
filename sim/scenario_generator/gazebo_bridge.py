@@ -75,13 +75,13 @@ _FACE_SDF = """\
     <pose>{x} {y} {z} 0 0 0</pose>{pose_publisher_plugin}
     <link name="link">
       <visual name="face_visual">
-        <transparency>0</transparency>
+        <cast_shadows>false</cast_shadows>
         <geometry>
           <box><size>0.002 0.5 0.5</size></box>
         </geometry>
         <material>
           <ambient>1 1 1 1</ambient>
-          <diffuse>1 1 1 1</diffuse>
+          <diffuse>1 1 1 0.99</diffuse>
           <pbr><metal>
             <albedo_map>{texture_abs_path}</albedo_map>
             <metalness>0.0</metalness>

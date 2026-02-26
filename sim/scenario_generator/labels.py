@@ -16,33 +16,53 @@ from typing import Optional
 
 LABEL_REGISTRY: dict[str, list[str]] = {
 
+    # ── Single face ───────────────────────────────────────────────────────────
+
+    "track": [
+        "look at the person",
+        "look at me",
+        "watch the person",
+        "track the face",
+        "follow the person",
+        "keep your eye on the person",
+    ],
+
     # ── Multi-face: distinguishing attribute ──────────────────────────────────
     # {attr} is substituted at generation time.
 
     "multi_attr": [
+        "look at the one with the {attr}",
+        "look at the person with the {attr}",
+        "look at the one wearing the {attr}",
         "track the person wearing the {attr}",
         "follow the one with the {attr}",
         "track the {attr}",
         "follow the {attr}",
         "look at the one with the {attr} on",
+        "watch the person with the {attr}",
         "keep your eye on the person with the {attr}",
         "find the {attr} and follow them",
+        "find the person with the {attr} and watch them",
     ],
 
     # ── Multi-face: positional ────────────────────────────────────────────────
 
     "multi_left": [
+        "look at the person on the left",
+        "look at the one on the left",
         "follow the person on the left",
         "track the leftmost person",
-        "look to the left one",
+        "watch the person on the left",
         "keep your eye on the person furthest left",
         "the one on the left — follow them",
     ],
 
     "multi_right": [
+        "look at the person on the right",
+        "look at the one on the right",
         "follow the person on the right",
         "track the rightmost person",
-        "look to the right one",
+        "watch the person on the right",
         "keep your eye on the person furthest right",
         "the one on the right — follow them",
     ],
@@ -50,10 +70,12 @@ LABEL_REGISTRY: dict[str, list[str]] = {
     # ── Multi-face: proximity ─────────────────────────────────────────────────
 
     "multi_closest": [
+        "look at the closest person",
+        "look at whoever is nearest",
+        "watch the closest person",
         "track the closest person",
         "follow the nearest one",
         "keep the person closest to you centered",
-        "track whoever is nearest",
         "focus on the closest face",
         "stay with the one right in front of you",
     ],
@@ -171,7 +193,7 @@ def assign_label(
     n = len(faces)
 
     if n == 1:
-        return "track", "track the face"
+        return "track", rng.choice(LABEL_REGISTRY["track"])
 
     # Multi-face ──────────────────────────────────────────────────────────────
 

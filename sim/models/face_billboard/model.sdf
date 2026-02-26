@@ -29,6 +29,9 @@
 
     <link name="link">
       <visual name="face_visual">
+        <!-- Disable shadow casting so the transparent alpha edges don't cast
+             a hard rectangular shadow from the billboard mesh boundary. -->
+        <cast_shadows>false</cast_shadows>
         <geometry>
           <!--
             Thin in X (2 mm) so only the YZ faces are visible to the camera.
@@ -40,11 +43,14 @@
         </geometry>
         <material>
           <!--
-            Use full-white ambient+diffuse so the PBR albedo_map is displayed
-            at its original colours under any lighting condition in the world.
+            Use full-white ambient and diffuse so the PBR albedo_map is displayed
+            at its original colours.  Diffuse alpha 0.99 (not 1.0) tells OGRE2
+            to enable transparent rendering mode, which causes it to read the
+            albedo_map's alpha channel for per-pixel cutout transparency.
+            The 0.01 difference is imperceptible on opaque pixels.
           -->
           <ambient>1.0 1.0 1.0 1</ambient>
-          <diffuse>1.0 1.0 1.0 1</diffuse>
+          <diffuse>1.0 1.0 1.0 0.99</diffuse>
           <pbr>
             <metal>
               <!--

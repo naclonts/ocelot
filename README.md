@@ -140,50 +140,26 @@ gz light --list   # should be empty
 
 #### Data collection
 
-Collect synchronized (frame, language label, pan_vel, tilt_vel) episodes from the running oracle and write them as compressed HDF5 files.
-
-**Output path**: always write to `/ws/src/ocelot/sim/dataset` so files persist on the host at `~/projects/ocelot/sim/dataset/`. Writing to `/tmp/` is ephemeral — lost when the container exits.
-
-```bash
-# Terminal 1 — start sim stack (must be running before collect_data.py)
-docker compose -f deploy/docker/docker-compose.sim.yml run --rm --name ocelot-sim sim bash -c "
-  source /opt/ros/jazzy/setup.bash && cd /ws &&
-  colcon build --symlink-install --packages-select ocelot --event-handlers console_direct- &&
-  source /ws/install/setup.bash &&
-  ros2 launch ocelot sim_launch.py world:=scenario_world use_oracle:=true headless:=true"
-
-# Terminal 2 — collect episodes (runs against the live sim in Terminal 1)
-docker exec -e ROS_DOMAIN_ID=1 ocelot-sim bash -c "
-  source /opt/ros/jazzy/setup.bash && source /ws/install/setup.bash &&
-  python3 /ws/src/ocelot/sim/data_gen/collect_data.py \
-    --n_episodes 100 \
-    --output /ws/src/ocelot/sim/dataset \
-    --base_seed 0"
-```
-
-Episodes appear as they are written: `sim/dataset/episodes/ep_NNNNNN.h5`. After collection, run the quality check:
+`collect_parallel.sh` generates episodes, runs them, and saves output. Output always goes to
+`/ws/src/ocelot/sim/dataset` (bind-mounted to `sim/dataset/` on the host).
 
 ```bash
-docker exec -e ROS_DOMAIN_ID=1 ocelot-sim \
-  python3 /ws/src/ocelot/sim/data_gen/check_dataset.py --dataset /ws/src/ocelot/sim/dataset
+# Fresh dataset — 4 shards × 100 episodes
+bash sim/data_gen/collect_parallel.sh --shards 4 --episodes 100
+
+# Custom output path
+bash sim/data_gen/collect_parallel.sh --shards 4 --episodes 100 --output /data/dataset
 ```
 
-#### Parallel data collection (sharding)
+The script auto-detects the next unused shard index from the output directory, so re-running
+never overwrites existing data. Override with `--start-shard N` if needed.
 
-Episodes are sequential within a single sim stack (one world, one camera). Scale throughput
-by running N independent Gazebo instances, each isolated by `GZ_PARTITION` and `ROS_DOMAIN_ID`.
+After collection, verify a shard:
 
 ```bash
-# Defaults: 4 shards × 25 000 episodes → sim/dataset/merged
-bash sim/data_gen/collect_parallel.sh
-
-# Override any default:
-bash sim/data_gen/collect_parallel.sh --shards 2 --episodes 1000 --output /data/dataset
+docker exec -e ROS_DOMAIN_ID=1 ocelot-sim-0 \
+  python3 /ws/src/ocelot/sim/data_gen/check_dataset.py --dataset /ws/src/ocelot/sim/dataset/shard_0
 ```
-
-Each shard writes to `shard_N/episodes/`; the script merges them automatically at the end.
-`--shard N` in `collect_data.py` sets `base_ep`, `base_seed`, and output subdir automatically.
-Practical limit is ~2–4 shards (each Gazebo server costs ~1–2 CPU cores and ~400 MB RAM).
 
 ---
 
