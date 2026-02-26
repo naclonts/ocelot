@@ -82,6 +82,11 @@ _FACE_SDF = """\
             <size>0.5 0.5</size>
           </plane>
         </geometry>
+        <!-- Roll 90° around the plane normal (X axis) to correct UV mapping.
+             OGRE2 computes tangent axes from the normal; for normal=-1,0,0 the
+             default mapping puts U→Z and V→Y, rotating the texture 90° CCW.
+             Rotating the visual 90° around X swaps the tangent frame back. -->
+        <pose>0 0 0 1.5708 0 0</pose>
         <material>
           <ambient>1 1 1 1</ambient>
           <diffuse>1 1 1 0.99</diffuse>
