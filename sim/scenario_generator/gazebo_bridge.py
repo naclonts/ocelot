@@ -76,7 +76,7 @@ _FACE_SDF = """\
     <static>true</static>
     <pose>{x} {y} {z} 0 0 0</pose>{pose_publisher_plugin}
     <link name="link">
-      <visual name="face_visual">
+      <visual name="face_visual_{ep}">
         <cast_shadows>false</cast_shadows>
         <geometry>
           <plane>
@@ -109,7 +109,7 @@ _BACKGROUND_SDF = """\
     <static>true</static>
     <pose>5 0 0 0 0 0</pose>
     <link name="link">
-      <visual name="wall_visual">
+      <visual name="wall_visual_{ep}">
         <geometry>
           <box><size>0.002 12.0 12.0</size></box>
         </geometry>
@@ -167,7 +167,7 @@ _DISTRACTOR_SDF = """\
     <static>true</static>
     <pose>{x} {y} {z} 0 0 0</pose>
     <link name="link">
-      <visual name="vis">
+      <visual name="vis_{ep}">
         <geometry>
           {geom}
         </geometry>
@@ -212,6 +212,11 @@ class GazeboBridge:
         self._set_pose_srv = f"/world/{world}/set_pose"
         # name → entity type int; used by despawn() to choose the right type.
         self._spawned: dict[str, int] = {}
+        # Monotonically increasing episode counter — used to suffix visual
+        # names so OGRE's BaseStorage never sees a duplicate geometry name
+        # across episode transitions (even when the render thread lags behind
+        # the physics world removal).
+        self._ep_id: int = 0
 
     # ------------------------------------------------------------------
     # Low-level helpers
@@ -281,6 +286,7 @@ class GazeboBridge:
             x=pos[0], y=pos[1], z=pos[2],
             texture_abs_path=texture_abs_path,
             pose_publisher_plugin=plugin,
+            ep=self._ep_id,
         )
         return self._spawn_sdf(sdf, _ENTITY_MODEL, name)
 
@@ -288,8 +294,12 @@ class GazeboBridge:
         """Remove a named entity using its tracked type.  Idempotent."""
         if name not in self._spawned:
             return True  # nothing to do
-        entity_type = self._spawned.pop(name)
-        return self._remove_entity(name, entity_type)
+        entity_type = self._spawned[name]
+        ok = self._remove_entity(name, entity_type)
+        if ok:
+            del self._spawned[name]
+        # On failure keep the entry so the next teardown_episode() retries.
+        return ok
 
     def set_pose(self, name: str, x: float, y: float, z: float) -> bool:
         """Set the absolute world position of a model.  Rotation stays at identity."""
@@ -319,7 +329,7 @@ class GazeboBridge:
         """
         if "background_wall" in self._spawned:
             self.despawn("background_wall")
-        sdf = _BACKGROUND_SDF.format(texture_abs_path=background_abs_path)
+        sdf = _BACKGROUND_SDF.format(texture_abs_path=background_abs_path, ep=self._ep_id)
         return self._spawn_sdf(sdf, _ENTITY_MODEL, "background_wall")
 
     def spawn_key_light(
@@ -413,6 +423,7 @@ class GazeboBridge:
             x=pos[0], y=pos[1], z=pos[2],
             geom=geom,
             r=r, g=g, b=b,
+            ep=self._ep_id,
         )
         return self._spawn_sdf(sdf, _ENTITY_MODEL, name)
 
@@ -421,11 +432,19 @@ class GazeboBridge:
 
         config: ScenarioConfig from sim.scenario_generator.scenario.
         """
+        # Increment the episode counter BEFORE spawning so all visuals in this
+        # episode get a unique suffix (e.g. face_visual_3, wall_visual_3).
+        # This makes every geometry name unique in OGRE's BaseStorage, so
+        # even if the render thread hasn't yet processed the removal of the
+        # previous episode's visuals, CreateVisual never encounters a
+        # duplicate name and cannot segfault.
+        self._ep_id += 1
         self.teardown_episode()
-        # Give Gazebo time to flush pending removals before spawning new
-        # entities.  Without this, rapid teardown→setup cycles can queue
-        # removals and spawns out of order, causing name conflicts.
-        time.sleep(0.3)
+        # Short pause to let Gazebo's service handler catch up under load.
+        # The unique-visual-name scheme above is the primary crash guard;
+        # this sleep mainly ensures the physics-side removal completes before
+        # we spawn new entities (avoids duplicate model names in the ECS).
+        time.sleep(0.5)
 
         self.spawn_background(config.background_path)
         self.spawn_key_light(
