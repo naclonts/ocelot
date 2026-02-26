@@ -148,7 +148,8 @@ class TestLabels:
         )
 
     def test_single_face_always_track(self):
-        """Single face always returns ('track', 'track the face') regardless of speed/position."""
+        """Single face always returns key='track' with a label drawn from LABEL_REGISTRY['track']."""
+        from sim.scenario_generator.labels import LABEL_REGISTRY
         rng = random.Random(0)
         for motion, speed, y in [
             ("sinusoidal", 0.1, 0.0),   # previously single_slow
@@ -158,7 +159,7 @@ class TestLabels:
             face = _make_face_config(motion=motion, speed=speed, initial_y=y)
             key, label = assign_label([face], 0, {}, rng)
             assert key == "track", f"Expected 'track', got {key!r}"
-            assert label == "track the face"
+            assert label in LABEL_REGISTRY["track"], f"Unexpected label: {label!r}"
 
     def test_label_coverage(self, generator):
         """500 samples must cover all 4 multi-face label keys at least once."""
