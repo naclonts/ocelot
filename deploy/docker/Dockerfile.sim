@@ -40,8 +40,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     xauth \
     && rm -rf /var/lib/apt/lists/*
 
-# Data pipeline dependencies
-RUN pip3 install --break-system-packages h5py
+# Data pipeline + VLA inference dependencies
+RUN pip3 install --break-system-packages h5py onnxruntime
 
 # Workspace setup
 WORKDIR /ws

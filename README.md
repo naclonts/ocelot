@@ -161,6 +161,120 @@ docker exec -e ROS_DOMAIN_ID=1 ocelot-sim-0 \
   python3 /ws/src/ocelot/sim/data_gen/check_dataset.py --dataset /ws/src/ocelot/sim/dataset/shard_0
 ```
 
+#### Training
+
+Install training dependencies on the host (one-time):
+
+```bash
+pip install -r requirements-train.txt
+```
+
+Smoke test on the existing 400-episode dataset (3 epochs, ~5 min on RTX 2070):
+
+```bash
+source .venv/bin/activate
+python3 train/train.py \
+    --dataset_dir sim/dataset/ \
+    --output_dir  runs/v0.0-smoke/ \
+    --epochs 3 \
+    --batch_size 32 \
+    --experiment ocelot-smoke
+```
+
+Full training run with AMP:
+
+```bash
+python3 train/train.py \
+    --dataset_dir sim/dataset/ \
+    --output_dir  runs/v0.1/ \
+    --epochs 20 \
+    --batch_size 64 \
+    --amp \
+    --experiment ocelot-v0.1
+```
+
+Inspect metrics:
+
+```bash
+mlflow ui    # open http://localhost:5000
+```
+
+`val_mse_<label_key>` columns show per-label breakdown (e.g. `basic_track`, `multi_left`).
+A good model reaches RMSE < 0.015 rad/s per axis (< 10% of the typical oracle signal).
+
+#### Evaluate a checkpoint
+
+```bash
+source .venv/bin/activate
+
+# Text report (RMSE, Pearson r, sign agreement, per-label breakdown):
+python3 train/eval.py \
+    --checkpoint runs/v0.0-smoke/best.pt \
+    --dataset_dir sim/dataset/
+
+# With scatter plot + 4 episode time-series overlays:
+python3 train/eval.py \
+    --checkpoint runs/v0.0-smoke/best.pt \
+    --dataset_dir sim/dataset/ \
+    --plot --episodes 4
+# → runs/v0.0-smoke/scatter.png, runs/v0.0-smoke/episodes.png
+```
+
+#### VLA sim validation
+
+Run the trained model inside Gazebo to see whether it tracks the oscillating face:
+
+**Step 1 — Export to ONNX** (host, one-time per checkpoint):
+
+```bash
+source .venv/bin/activate
+python3 train/export_onnx.py \
+    --checkpoint runs/v0.0-smoke/best.pt \
+    --output     runs/v0.0-smoke/best.onnx \
+    --verify
+# → best.onnx + best_tokens.json alongside the checkpoint
+```
+
+**Step 2 — Rebuild sim image** (one-time after Dockerfile change, adds `onnxruntime`):
+
+```bash
+make sim-build
+```
+
+**Step 3 — Launch sim with VLA node**:
+
+```bash
+docker compose -f deploy/docker/docker-compose.sim.yml run --rm sim bash -c "
+  source /opt/ros/jazzy/setup.bash && cd /ws &&
+  colcon build --symlink-install --packages-select ocelot &&
+  source /ws/install/setup.bash &&
+  ros2 launch ocelot sim_launch.py use_vla:=true headless:=true
+"
+```
+
+The default checkpoint path inside the container is `/ws/src/ocelot/runs/v0.0-smoke/best.onnx`
+(the `runs/` directory is bind-mounted from the host). Override with:
+
+```bash
+ros2 launch ocelot sim_launch.py use_vla:=true headless:=true \
+    vla_checkpoint:=/ws/src/ocelot/runs/v0.1/best.onnx \
+    vla_command:="track the face"
+```
+
+**Monitor** from a second shell in the same container:
+
+```bash
+# Joint positions should change as the face oscillates
+ros2 topic echo /joint_states --field position
+
+# VLA velocity commands
+ros2 topic echo /cmd_vel
+```
+
+The `vla_node` logs `pan=+0.xxx  tilt=+0.xxx rad/s` per frame. If the joints track
+the face motion, behavioral cloning is working. If output is near-zero or static,
+the model needs more training data or epochs.
+
 ---
 
 ## Rosbag
@@ -260,6 +374,7 @@ ocelot/
 │   ├── tracker_node.py      # Haar cascade proportional controller
 │   ├── oracle_node.py       # Privileged ground-truth FK tracker (sim only)
 │   ├── oracle_validator.py  # Pixel-error measurement for oracle validation
+│   ├── vla_node.py          # ONNX inference node for sim validation (Phase 3)
 │   └── visualizer_node.py   # Annotated image publisher (optional)
 ├── launch/tracker_launch.py
 ├── config/tracker_params.yaml
@@ -346,7 +461,7 @@ To switch to GPU-accelerated rendering (NVIDIA), use the GPU compose overlay as 
 | Phase | Weeks | Goal |
 |---|---|---|
 | 1 | 1–4 | Classical face tracker (Haar cascade) — **complete** |
-| 2 | 5–8 | Gazebo sim + synthetic data engine — **current** |
-| 3 | 9–13 | VLA model (DINOv2 + CLIP + action head) |
+| 2 | 5–8 | Gazebo sim + synthetic data engine — **complete** |
+| 3 | 9–13 | VLA model (DINOv2 + CLIP + action head) — **current** |
 | 4 | 14–18 | Edge deployment + MLOps loop |
 | 5 | 19–20 | Polish + portfolio |

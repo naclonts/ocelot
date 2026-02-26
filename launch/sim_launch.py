@@ -17,9 +17,12 @@ from launch_ros.actions import Node
 
 def launch_setup(context, *args, **kwargs):
     pkg = get_package_share_directory('ocelot')
-    headless = LaunchConfiguration('headless').perform(context)
-    use_oracle = LaunchConfiguration('use_oracle').perform(context) == 'true'
-    world_name = LaunchConfiguration('world').perform(context)
+    headless        = LaunchConfiguration('headless').perform(context)
+    use_oracle      = LaunchConfiguration('use_oracle').perform(context) == 'true'
+    use_vla         = LaunchConfiguration('use_vla').perform(context) == 'true'
+    world_name      = LaunchConfiguration('world').perform(context)
+    vla_checkpoint  = LaunchConfiguration('vla_checkpoint').perform(context)
+    vla_command     = LaunchConfiguration('vla_command').perform(context)
 
     urdf_path = os.path.join(pkg, 'urdf', 'pan_tilt.urdf')
     controllers_yaml = os.path.join(pkg, 'config', 'controllers.yaml')
@@ -151,13 +154,21 @@ def launch_setup(context, *args, **kwargs):
         )],
     )
 
-    # cmd_vel publisher — mutually exclusive:
-    #   use_oracle=false (default): tracker_node (Haar cascade)
-    #   use_oracle=true:            oracle_node  (privileged ground-truth FK)
-    # Only one node runs at a time to avoid conflicting /cmd_vel writes.
-    # tracker_node publishes Twist() zeros when disabled, which would zero out
-    # oracle commands — so we simply don't launch the other node.
-    if use_oracle:
+    # cmd_vel publisher — mutually exclusive (exactly one runs):
+    #   use_vla=true:    vla_node    (trained ONNX model — sim validation)
+    #   use_oracle=true: oracle_node (privileged ground-truth FK)
+    #   default:         tracker_node (Haar cascade)
+    if use_vla:
+        cmd_vel_node = Node(
+            package='ocelot',
+            executable='vla_node',
+            parameters=[{
+                'checkpoint': vla_checkpoint,
+                'command':    vla_command,
+            }],
+            output='screen',
+        )
+    elif use_oracle:
         cmd_vel_node = Node(
             package='ocelot',
             executable='oracle_node',
@@ -252,6 +263,24 @@ def generate_launch_description():
                 'tracker_world: static face + background (parity check / manual testing). '
                 'scenario_world: empty world for per-episode spawning (data collection).'
             ),
+        ),
+        DeclareLaunchArgument(
+            'use_vla',
+            default_value='false',
+            description=(
+                'Use vla_node (trained ONNX model) instead of tracker_node or oracle_node. '
+                'Requires vla_checkpoint to point to a valid best.onnx file.'
+            ),
+        ),
+        DeclareLaunchArgument(
+            'vla_checkpoint',
+            default_value='/ws/src/ocelot/runs/v0.0-smoke/best.onnx',
+            description='Absolute path to the exported ONNX model inside the container.',
+        ),
+        DeclareLaunchArgument(
+            'vla_command',
+            default_value='track the face',
+            description='Language command sent to the VLA model on every frame.',
         ),
         OpaqueFunction(function=launch_setup),
     ])

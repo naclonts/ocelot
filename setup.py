@@ -43,6 +43,7 @@ setup(
             'cmd_vel_adapter = ocelot.cmd_vel_adapter:main',
             'visualizer_node = ocelot.visualizer_node:main',
             'oracle_validator = ocelot.oracle_validator:main',
+            'vla_node = ocelot.vla_node:main',
         ],
     },
 )
