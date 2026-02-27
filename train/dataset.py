@@ -61,6 +61,7 @@ class OcelotDataset(Dataset):
         split: str,
         dataset_dir: Path,
         transform=None,
+        max_episodes: int | None = None,
     ) -> None:
         if split not in ("train", "val", "test"):
             raise ValueError(f"split must be train/val/test, got {split!r}")
@@ -79,19 +80,27 @@ class OcelotDataset(Dataset):
                 f"No {split}.txt files found under {dataset_dir}"
             )
 
+        # Collect all (episodes_dir, ep_id) pairs across shards, then truncate.
+        all_episodes: list[tuple[Path, str]] = []
         for split_file in sorted(split_files):
             shard_dir = split_file.parent
             episodes_dir = shard_dir / "episodes"
             ep_ids = [line.strip() for line in split_file.read_text().splitlines()
                       if line.strip()]
             for ep_id in ep_ids:
-                h5_path = episodes_dir / f"ep_{ep_id}.h5"
-                if not h5_path.exists():
-                    raise FileNotFoundError(f"Episode file not found: {h5_path}")
-                with h5py.File(h5_path, "r") as f:
-                    n_frames = f["frames"].shape[0]
-                for frame_idx in range(n_frames):
-                    self._index.append((h5_path, frame_idx))
+                all_episodes.append((episodes_dir, ep_id))
+
+        if max_episodes is not None:
+            all_episodes = all_episodes[:max_episodes]
+
+        for episodes_dir, ep_id in all_episodes:
+            h5_path = episodes_dir / f"ep_{ep_id}.h5"
+            if not h5_path.exists():
+                raise FileNotFoundError(f"Episode file not found: {h5_path}")
+            with h5py.File(h5_path, "r") as f:
+                n_frames = f["frames"].shape[0]
+            for frame_idx in range(n_frames):
+                self._index.append((h5_path, frame_idx))
 
     # ------------------------------------------------------------------
     # Internal helpers

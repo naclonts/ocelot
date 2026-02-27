@@ -67,12 +67,13 @@ def build_loaders(
     batch_size: int,
     num_workers: int,
     tokenizer,
+    max_episodes: int | None = None,
 ) -> tuple[DataLoader, DataLoader]:
     """Build train and val DataLoaders backed by OcelotDataset."""
     collate = lambda b: OcelotDataset.collate_fn(b, tokenizer)  # noqa: E731
 
-    train_ds = OcelotDataset("train", dataset_dir)
-    val_ds   = OcelotDataset("val",   dataset_dir)
+    train_ds = OcelotDataset("train", dataset_dir, max_episodes=max_episodes)
+    val_ds   = OcelotDataset("val",   dataset_dir, max_episodes=max_episodes)
 
     train_loader = DataLoader(
         train_ds,
@@ -123,7 +124,7 @@ def train_one_epoch(
         optimizer.zero_grad()
 
         if scaler is not None:
-            with torch.cuda.amp.autocast():
+            with torch.amp.autocast("cuda"):
                 pred = model(frames, input_ids, attention_mask)
                 loss = criterion(pred, targets)
             scaler.scale(loss).backward()
@@ -210,6 +211,8 @@ def parse_args() -> argparse.Namespace:
                    help="DataLoader worker processes (set 0 to debug in main process)")
     p.add_argument("--amp",             action="store_true",
                    help="Mixed-precision training (fp16); halves VRAM, ~2× faster")
+    p.add_argument("--max_episodes",    type=int,   default=None,
+                   help="Cap total episodes per split (train and val); useful for fast sweep runs")
     p.add_argument("--experiment",      type=str,   default="ocelot",
                    help="MLflow experiment name")
     return p.parse_args()
@@ -234,7 +237,8 @@ def main() -> None:
     # DataLoaders
     log.info("Building DataLoaders from %s …", args.dataset_dir)
     train_loader, val_loader = build_loaders(
-        args.dataset_dir, args.batch_size, args.num_workers, tokenizer
+        args.dataset_dir, args.batch_size, args.num_workers, tokenizer,
+        max_episodes=args.max_episodes,
     )
     log.info(
         "Dataset: %d train frames / %d val frames",
@@ -262,11 +266,15 @@ def main() -> None:
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, T_max=args.epochs
     )
-    scaler = torch.cuda.amp.GradScaler() if args.amp else None
+    scaler = torch.amp.GradScaler("cuda") if args.amp else None
     if args.amp:
         log.info("AMP enabled (GradScaler)")
 
     # MLflow
+    # autolog captures optimizer config, system metrics, and model summary.
+    # Epoch-level metrics (train_loss, val_loss, etc.) are logged manually below
+    # since autolog's epoch hooks require PyTorch Lightning.
+    mlflow.pytorch.autolog(log_every_n_epoch=1, log_models=False)
     mlflow.set_experiment(args.experiment)
     with mlflow.start_run():
         mlflow.log_params({
@@ -277,6 +285,7 @@ def main() -> None:
             "n_heads":         args.n_heads,
             "amp":             args.amp,
             "dataset_dir":     str(args.dataset_dir),
+            "max_episodes":    args.max_episodes,
             "n_trainable":     n_trainable,
         })
 

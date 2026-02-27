@@ -168,6 +168,28 @@ class TestOcelotDataset:
         assert len(out["cmds"]) == 4
         assert len(out["label_keys"]) == 4
 
+    def test_max_episodes_limits_frames(self, tmp_path):
+        """max_episodes=1 should yield exactly 1 episode worth of frames."""
+        ds = OcelotDataset("train", _make_fixture(tmp_path), max_episodes=1)
+        assert len(ds) == 1 * N_FRAMES
+
+    def test_max_episodes_zero(self, tmp_path):
+        """max_episodes=0 should yield an empty dataset."""
+        ds = OcelotDataset("train", _make_fixture(tmp_path), max_episodes=0)
+        assert len(ds) == 0
+
+    def test_max_episodes_exceeds_available(self, tmp_path):
+        """max_episodes larger than available episodes should return all episodes."""
+        ds = OcelotDataset("train", _make_fixture(tmp_path), max_episodes=999)
+        assert len(ds) == 2 * N_FRAMES
+
+    def test_max_episodes_none_unchanged(self, tmp_path):
+        """max_episodes=None (default) should behave identically to no limit."""
+        fixture = _make_fixture(tmp_path)
+        ds_default = OcelotDataset("train", fixture)
+        ds_none    = OcelotDataset("train", fixture, max_episodes=None)
+        assert len(ds_default) == len(ds_none)
+
     def test_multi_shard(self, tmp_path):
         """Two shards should be concatenated correctly."""
         dataset_dir = tmp_path / "multi"
