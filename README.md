@@ -181,26 +181,22 @@ Pull dataset using DVC (>75 GB data) with `dvc pull`.
 
 ##### Sweep
 
-Hyperparameter sweep (27 combos × 5 epochs, ~2–3 h on RTX 2070).
-
-Use `--max_episodes` to cap each split to a smaller subset for faster sweep runs.
+Hyperparameter sweep over `lr` × `n_fusion_layers`:
 
 ```bash
 SWEEP=sweep-v0.1   # increment to avoid overwriting previous sweep checkpoints
 for lr in 1e-4 3e-4 1e-3; do
   for layers in 1 2 4; do
-    for bs in 32 64 128; do
-      python3 train/train.py \
-          --dataset_dir sim/dataset/ \
-          --output_dir  runs/$SWEEP/lr${lr}_l${layers}_bs${bs}/ \
-          --epochs 5 \
-          --lr $lr \
-          --n_fusion_layers $layers \
-          --batch_size $bs \
-          --max_episodes 1500 \
-          --amp \
-          --experiment ocelot-sweep
-    done
+    python3 train/train.py \
+        --dataset_dir sim/dataset/ \
+        --output_dir  runs/$SWEEP/lr${lr}_l${layers}/ \
+        --epochs 3 \
+        --lr $lr \
+        --n_fusion_layers $layers \
+        --batch_size 64 \
+        --max_episodes 1500 \
+        --amp \
+        --experiment ocelot-sweep
   done
 done
 ```
