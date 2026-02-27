@@ -23,6 +23,7 @@ def launch_setup(context, *args, **kwargs):
     world_name      = LaunchConfiguration('world').perform(context)
     vla_checkpoint  = LaunchConfiguration('vla_checkpoint').perform(context)
     vla_command     = LaunchConfiguration('vla_command').perform(context)
+    inertia_tau     = float(LaunchConfiguration('inertia_tau').perform(context))
 
     urdf_path = os.path.join(pkg, 'urdf', 'pan_tilt.urdf')
     controllers_yaml = os.path.join(pkg, 'config', 'controllers.yaml')
@@ -199,6 +200,7 @@ def launch_setup(context, *args, **kwargs):
     cmd_vel_adapter = Node(
         package='ocelot',
         executable='cmd_vel_adapter',
+        parameters=[{'inertia_tau': inertia_tau}],
         output='screen',
     )
 
@@ -274,8 +276,19 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'vla_checkpoint',
-            default_value='/ws/src/ocelot/runs/v0.0-smoke/best.onnx',
+            default_value='/ws/src/ocelot/runs/sweep-v0.0.2-1500-ep/lr1e-4_l2/best.onnx',
             description='Absolute path to the exported ONNX model inside the container.',
+        ),
+        DeclareLaunchArgument(
+            'inertia_tau',
+            default_value='0.0',
+            description=(
+                'Servo inertia time constant in seconds for cmd_vel_adapter. '
+                'Simulates real servo ramp-up (0.0 = ideal pass-through). '
+                'Keep at 0.0 for data collection — a single-frame VLA cannot '
+                'model the filter history, so non-zero values produce '
+                'inconsistent labels. Enable only for deployment smoothing.'
+            ),
         ),
         DeclareLaunchArgument(
             'vla_command',

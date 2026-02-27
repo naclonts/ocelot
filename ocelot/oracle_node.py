@@ -62,9 +62,9 @@ class OracleNode(Node):
         super().__init__('oracle_node')
 
         self.declare_parameter('enabled', False)
-        self.declare_parameter('kp_pan', 20.0)       # rad/s per radian of pan error
-        self.declare_parameter('kp_tilt', 10.0)       # rad/s per radian of tilt error
-        self.declare_parameter('max_velocity', 1.0)  # rad/s clamp — must match URDF velocity="1.0"
+        self.declare_parameter('kp_pan', 5.0)        # rad/s per radian of pan error
+        self.declare_parameter('kp_tilt', 2.5)       # rad/s per radian of tilt error
+        self.declare_parameter('max_velocity', 0.3)  # rad/s clamp — moderate speed for training
         self.declare_parameter('deadband_rad', 0.002) # ~0.11° — suppress sub-pixel chatter
         self.declare_parameter('label_key', 'track')  # 'slow' → halve max_velocity
 

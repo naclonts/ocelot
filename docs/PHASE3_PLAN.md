@@ -427,6 +427,48 @@ mlflow ui --host 127.0.0.1 --port 5000
 # open http://localhost:5000 → experiment "ocelot-sweep", sort by val_loss ascending
 ```
 
+### 4d — Periodic Perturbation Data Recollection (Distribution Shift Fix)
+
+**Context**: Dataset analysis on 8k episodes showed ~3% of frames have large oracle corrections.
+Mean |pan_vel| peaks at frames 2–4 (oracle reacting to face spawn) then collapses immediately —
+the oracle is that fast. A start-of-episode perturbation yields the same 3 useful recovery frames
+then 97 steady-state frames. The VLA's 13.3° mean / 22.4° max eval error is a direct consequence:
+>95% of training frames show near-zero commands, so that becomes the model's default output.
+
+**Fix**: Periodic mid-episode perturbation. Every `--perturb_interval` frames, face_0 is teleported
+to a random angular offset from its motion-pattern position and held there for `PERTURB_DURATION=5`
+frames before the motion pattern resumes. With `--perturb_interval 15` on 100-frame episodes:
+~6 perturbations × 5 recovery frames ≈ **30% recovery frames**, up from 3%.
+
+**Why ±0.5 rad**: Camera half-FOV is 30° ≈ 0.524 rad. Capping at ±0.5 rad (28.6°) keeps the face
+just inside the frame at worst case. Uniform distribution (not Gaussian) ensures even coverage of
+the full angular range.
+
+**Implementation**: `sim/data_gen/collect_data.py` — `--perturb_interval` and `--perturb_range` args.
+After each `runner.step()` call, if a perturbation is active, `bridge.set_pose` is called again on
+face_0 with a world-space Y/Z offset derived from the sampled angular perturbation. The perturbation
+RNG is seeded from `config.seed ^ 0xBEEF`, independent of augmentation and scenario streams.
+
+```bash
+# Collect 1500 perturbed episodes (inside sim container)
+python3 /ws/src/ocelot/sim/data_gen/collect_data.py \
+    --n_episodes 1500 \
+    --output /ws/src/ocelot/sim/dataset_perturbed/ \
+    --base_seed 10000 \
+    --perturb_interval 15 \
+    --perturb_range 0.5
+
+# Quality check
+python3 /ws/src/ocelot/sim/data_gen/check_dataset.py \
+    --dataset /ws/src/ocelot/sim/dataset_perturbed/
+```
+
+**Success gate**: `pan_vel` p95 for the perturbed dataset should be significantly higher than the
+clean baseline (p95 ≈ 0.17 rad/s). Expect p95 ≈ 0.5+ rad/s. Use the perturbed dataset (or a
+merge with the existing clean dataset) for Step 4b full training.
+
+---
+
 ### 4b — Full training (v0.1)
 
 Train the best config from the sweep on the full available dataset for 20 epochs.

@@ -209,7 +209,7 @@ Each combo writes a separate checkpoint under `runs/$SWEEP/` and a separate MLfl
 mlflow ui    # http://localhost:5000 → experiment "ocelot-sweep"
 ```
 
-##### Training
+##### Full train
 
 Full training run with AMP (use best `lr`/`layers`/`bs` from sweep):
 

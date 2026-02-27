@@ -7,11 +7,13 @@ files that become the VLA training dataset.
 
 Usage (inside the sim container, with sim_launch.py already running):
 
-    # Single process:
+    # Single process (with periodic perturbation — recommended):
     python3 /ws/src/ocelot/sim/data_gen/collect_data.py \\
         --n_episodes 100 \\
         --output /ws/src/ocelot/sim/dataset \\
         --base_seed 0 \\
+        --perturb_interval 15 \\
+        --perturb_range 0.5 \\
         [--base_ep 0]
 
     # Parallel sharding: each shard writes to <output>/shard_N/
@@ -69,6 +71,10 @@ EPISODE_SECS       = 10.0    # seconds of recorded data per episode
 WARMUP_SECS        = 4.0     # seconds before recording starts (oracle convergence)
 IMG_SIZE           = (224, 224)   # (width, height) for cv2.resize
 FRAMES_PER_EPISODE = int(EPISODE_SECS * CAMERA_HZ)   # 100
+
+# Periodic perturbation — number of frames to hold each offset so the oracle
+# has time to produce a recovery trajectory before the face snaps back.
+PERTURB_DURATION   = 8       # frames — hold long enough for oracle to start responding
 
 
 # ---------------------------------------------------------------------------
@@ -148,6 +154,65 @@ class CollectNode(Node):
         if msg is None:
             return 0.0, 0.0
         return float(msg.angular.z), float(msg.angular.y)
+
+
+# ---------------------------------------------------------------------------
+# Periodic perturbation controller
+# ---------------------------------------------------------------------------
+
+class PerturbController:
+    """Injects periodic angular perturbations into face_0's world position.
+
+    After each runner.step() call, invoke step() with the returned positions
+    dict and a bridge.set_pose callable.  The controller fires every
+    `interval` frames, overriding face_0's position with a random angular
+    offset for `duration` consecutive frames, then releases.
+
+    Seeded independently from augmentation and scenario RNGs via seed^0xBEEF.
+    """
+
+    def __init__(self, interval: int, range_rad: float, seed: int,
+                 duration: int = PERTURB_DURATION):
+        self.interval  = interval    # 0 = disabled
+        self.range_rad = range_rad
+        self.duration  = duration
+        self._rng      = np.random.default_rng(seed ^ 0xBEEF)
+        self._y_offset = 0.0
+        self._z_offset = 0.0
+        self._frames_left  = 0
+        self._next_trigger = interval  # first trigger at frame `interval`
+
+    def step(self, frame_idx: int, positions: dict,
+             set_pose_fn) -> bool:
+        """Apply perturbation if active.  Returns True if set_pose was called."""
+        if self.interval <= 0:
+            return False
+
+        if frame_idx == self._next_trigger:
+            face_pos = positions.get("face_0")
+            if face_pos is not None:
+                delta_pan  = self._rng.uniform(-self.range_rad, self.range_rad)
+                delta_tilt = self._rng.uniform(-self.range_rad, self.range_rad)
+                face_x = max(face_pos[0], 0.5)
+                self._y_offset   = face_x * np.tan(delta_pan)
+                self._z_offset   = face_x * np.tan(delta_tilt)
+                self._frames_left = self.duration
+                self._next_trigger = frame_idx + self.interval
+                log.debug("perturb frame=%d  Δpan=%.2f  Δtilt=%.2f rad",
+                          frame_idx, delta_pan, delta_tilt)
+
+        if self._frames_left > 0:
+            face_pos = positions.get("face_0")
+            if face_pos is not None:
+                set_pose_fn(
+                    "face_0",
+                    face_pos[0],
+                    face_pos[1] + self._y_offset,
+                    max(face_pos[2] + self._z_offset, 0.1),
+                )
+                self._frames_left -= 1
+                return True
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -322,6 +387,12 @@ def run_collection(node: CollectNode, args) -> None:
         tilt_vels: "list[float]"      = []
         record_ok = True
 
+        perturber = PerturbController(
+            interval  = args.perturb_interval,
+            range_rad = args.perturb_range,
+            seed      = config.seed,
+        )
+
         for frame_idx in range(FRAMES_PER_EPISODE):
             if not node.wait_for_new_image(timeout=5.0):
                 log.warning("ep %06d: frame %d: image timeout", ep_idx, frame_idx)
@@ -332,7 +403,10 @@ def run_collection(node: CollectNode, args) -> None:
             pan_vel, tilt_vel    = node.get_pan_tilt_vel()
 
             # Advance Gazebo entity positions to this simulation time.
-            runner.step(WARMUP_SECS + frame_idx / CAMERA_HZ)
+            positions = runner.step(WARMUP_SECS + frame_idx / CAMERA_HZ)
+
+            # Override face_0 pose if a perturbation window is active.
+            perturber.step(frame_idx, positions, bridge.set_pose)
 
             if raw_frame is None:
                 log.warning("ep %06d: frame %d: no image data", ep_idx, frame_idx)
@@ -385,6 +459,9 @@ def run_collection(node: CollectNode, args) -> None:
         "image_shape":        [224, 224, 3],
         "label_counts":       label_counts,
         "seed_range":         [args.base_seed, args.base_seed + args.n_episodes - 1],
+        "perturb_interval":   args.perturb_interval,
+        "perturb_range":      args.perturb_range,
+        "perturb_duration":   PERTURB_DURATION,
         "git_hash":           git_hash,
     }
     (out_dir / "metadata.json").write_text(json.dumps(metadata, indent=2))
@@ -428,6 +505,23 @@ def main() -> None:
             "Sets base_ep=shard*n_episodes and writes to <output>/shard_<N>/. "
             "base_seed defaults to shard*n_episodes unless --base_seed is given. "
             "Cannot be combined with --base_ep."
+        ),
+    )
+    parser.add_argument(
+        "--perturb_interval", type=int, default=30,
+        help=(
+            "Inject a random angular perturbation to face_0 every N frames during "
+            "recording, forcing the oracle to produce recovery trajectories. "
+            "The offset is held for PERTURB_DURATION frames then released. "
+            "Set to 0 to disable. Default: 30."
+        ),
+    )
+    parser.add_argument(
+        "--perturb_range", type=float, default=0.45,
+        help=(
+            "Half-range of the uniform angular perturbation in radians. "
+            "Camera half-FOV is ~0.524 rad (30°); default 0.45 keeps face in frame. "
+            "Default: 0.45."
         ),
     )
     args = parser.parse_args()

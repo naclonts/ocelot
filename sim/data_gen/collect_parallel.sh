@@ -68,8 +68,8 @@ for i in $(seq $START_SHARD $END_SHARD); do
           ros2 launch ocelot sim_launch.py world:=scenario_world use_oracle:=true headless:=true" &
 done
 
-echo "Waiting 30 s for sim stacks to finish starting ..."
-sleep 30
+echo "Waiting 15 s for sim stacks to finish starting ..."
+sleep 15
 
 # ── Start collectors ──────────────────────────────────────────────────────────
 for i in $(seq $START_SHARD $END_SHARD); do
