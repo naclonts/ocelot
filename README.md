@@ -177,19 +177,38 @@ Install training dependencies on the host (one-time):
 pip install -r requirements-train.txt
 ```
 
-Smoke test on the existing 400-episode dataset (3 epochs, ~5 min on RTX 2070):
+##### Sweep
+
+Hyperparameter sweep (27 combos × 5 epochs, ~2–3 h on RTX 2070).
 
 ```bash
-source .venv/bin/activate
-python3 train/train.py \
-    --dataset_dir sim/dataset/ \
-    --output_dir  runs/v0.0-smoke/ \
-    --epochs 3 \
-    --batch_size 32 \
-    --experiment ocelot-smoke
+SWEEP=sweep-v1   # increment to avoid overwriting previous sweep checkpoints
+for lr in 1e-4 3e-4 1e-3; do
+  for layers in 1 2 4; do
+    for bs in 32 64 128; do
+      python3 train/train.py \
+          --dataset_dir sim/dataset/ \
+          --output_dir  runs/$SWEEP/lr${lr}_l${layers}_bs${bs}/ \
+          --epochs 5 \
+          --lr $lr \
+          --n_fusion_layers $layers \
+          --batch_size $bs \
+          --amp \
+          --experiment ocelot-sweep
+    done
+  done
+done
 ```
 
-Full training run with AMP:
+Each combo writes a separate checkpoint under `runs/$SWEEP/` and a separate MLflow run under the `ocelot-sweep` experiment. View results sorted by `val_loss`:
+
+```bash
+mlflow ui    # http://localhost:5000 → experiment "ocelot-sweep"
+```
+
+##### Training
+
+Full training run with AMP (use best `lr`/`layers`/`bs` from sweep):
 
 ```bash
 python3 train/train.py \
