@@ -41,7 +41,29 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Data pipeline + VLA inference dependencies
-RUN pip3 install --break-system-packages h5py onnxruntime
+# onnxruntime-gpu: CUDA execution provider for vla_node; falls back to CPU if
+# the NVIDIA runtime is not active (e.g. headless sim-only runs).
+RUN pip3 install --break-system-packages h5py onnxruntime-gpu
+
+# CUDA toolkit libraries for onnxruntime-gpu.
+# The NVIDIA container runtime (compute capability) injects libcuda.so (driver
+# API) but NOT the toolkit libraries: cuBLAS, cuDNN, cuFFT, etc.  onnxruntime's
+# libonnxruntime_providers_cuda.so links against these at load time, so they
+# must be present in the container's library path.
+#
+# nvidia-cudnn-cu12 pulls in nvidia-cublas-cu12 + nvidia-cuda-runtime-cu12 as
+# dependencies, covering everything onnxruntime-gpu needs.  We copy the .so
+# files to /usr/local/lib and run ldconfig so the dynamic linker finds them
+# without any LD_LIBRARY_PATH gymnastics.
+RUN pip3 install --break-system-packages \
+        nvidia-cuda-runtime-cu12 \
+        nvidia-cudnn-cu12 \
+        nvidia-curand-cu12 \
+        nvidia-cufft-cu12 \
+        nvidia-cusolver-cu12 \
+        nvidia-cusparse-cu12 && \
+    python3 -c "import glob,os,shutil; [shutil.copy2(s,'/usr/local/lib/') for s in glob.glob('/usr/local/lib/python3.12/dist-packages/nvidia/*/lib/*.so*') if not os.path.islink(s)]" && \
+    ldconfig
 
 # Workspace setup
 WORKDIR /ws

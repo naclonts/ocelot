@@ -16,7 +16,9 @@ source /ws/install/setup.bash && \
 ros2 launch ocelot sim_launch.py headless:=$(HEADLESS)
 endef
 
-.PHONY: sim-build sim sim-gui sim-gpu sim-shell sim-xauth faces backgrounds dvc-push dvc-pull help
+VLA_ONNX ?= runs/v0.0-smoke/best.onnx
+
+.PHONY: sim-build sim sim-gui sim-gpu sim-vla sim-vla-eval sim-shell sim-xauth faces backgrounds dvc-push dvc-pull help
 
 help:
 	@grep -E '^##' Makefile | sed 's/## //'
@@ -39,6 +41,29 @@ sim-gui:
 sim-gpu: HEADLESS=false
 sim-gpu:
 	docker compose -f $(SIM_COMPOSE) -f $(SIM_GPU_COMPOSE) run --rm sim bash -c "$(SIM_CMD)"
+
+## sim-vla     run trained VLA model in sim (GPU). Usage: make sim-vla VLA_ONNX=runs/v0.1/best.onnx
+sim-vla:
+	docker compose -f $(SIM_COMPOSE) -f $(SIM_GPU_COMPOSE) run --rm sim bash -c " \
+	  source /opt/ros/jazzy/setup.bash && cd /ws && \
+	  colcon build --symlink-install --packages-select ocelot --event-handlers console_direct- && \
+	  source /ws/install/setup.bash && \
+	  ros2 launch ocelot sim_launch.py use_vla:=true headless:=true \
+	    vla_checkpoint:=/ws/src/ocelot/$(VLA_ONNX)"
+
+SCENARIO_SEED ?= 0
+N_SCENARIOS   ?= 5
+
+## sim-vla-eval  eval VLA against N training-distribution scenarios. Usage: make sim-vla-eval VLA_ONNX=runs/v0.1/best.onnx [SCENARIO_SEED=0] [N_SCENARIOS=5]
+sim-vla-eval:
+	docker compose -f $(SIM_COMPOSE) -f $(SIM_GPU_COMPOSE) run --rm sim bash -c " \
+	  source /opt/ros/jazzy/setup.bash && cd /ws && \
+	  colcon build --symlink-install --packages-select ocelot --event-handlers console_direct- && \
+	  source /ws/install/setup.bash && \
+	  ros2 launch ocelot sim_launch.py use_vla:=true world:=scenario_world headless:=true \
+	    vla_checkpoint:=/ws/src/ocelot/$(VLA_ONNX) & \
+	  python3 /ws/src/ocelot/sim/eval_vla_live.py \
+	    --seed $(SCENARIO_SEED) --n-scenarios $(N_SCENARIOS)"
 
 ## sim-shell   open an interactive shell in a fresh sim container
 sim-shell:
