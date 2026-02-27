@@ -16,7 +16,7 @@ source /ws/install/setup.bash && \
 ros2 launch ocelot sim_launch.py headless:=$(HEADLESS)
 endef
 
-VLA_ONNX ?= runs/v0.0-smoke/best.onnx
+VLA_ONNX ?= runs/sweep-v0.0.2-1500-ep/lr1e-4_l2/best.onnx
 
 .PHONY: sim-build sim sim-gui sim-gpu sim-vla sim-vla-eval sim-shell sim-xauth faces backgrounds dvc-push dvc-pull help
 
@@ -71,6 +71,7 @@ sim-shell:
 
 ## sim-xauth   one-time X11 auth setup (re-run if display session changes)
 sim-xauth:
+	rm -rf /tmp/.docker.xauth
 	touch /tmp/.docker.xauth
 	xauth nlist $$DISPLAY | sed -e 's/^..../ffff/' | xauth -f /tmp/.docker.xauth nmerge -
 

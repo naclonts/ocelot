@@ -60,7 +60,7 @@ make sim-build   # build the sim image (once, or after Dockerfile changes)
 make sim         # headless — no GUI, fast, works on any machine
 make sim-gui     # Gazebo GUI — software rendering (no GPU required)
 make sim-gpu     # Gazebo GUI — GPU accelerated (requires NVIDIA runtime)
-make sim-vla     # run VLA model in sim (GPU). Usage: make sim-vla VLA_ONNX=runs/v0.1/best.onnx
+make sim-vla VLA_ONNX=runs/v0.1/best.onnx   # run trained VLA model in sim (GPU, requires NVIDIA runtime)
 make sim-vla-eval  # eval VLA against N training-distribution scenarios (see below)
 make sim-xauth   # one-time X11 auth setup (re-run if display session changes)
 make sim-shell   # interactive shell in a fresh sim container
@@ -285,7 +285,11 @@ docker compose -f deploy/docker/docker-compose.sim.yml run --rm sim bash -c "
 **Step 3 (GPU) — Launch sim with VLA node on NVIDIA GPU** (requires NVIDIA container runtime):
 
 ```bash
-make sim-vla VLA_ONNX=runs/v0.0-smoke/best.onnx
+# Run VLA in sim
+make sim-vla VLA_ONNX=runs/sweep-v0.0.2-1500-ep/lr1e-4_l2/best.onnx
+
+# Evaluate against N reproducible scenarios (optional: override seed and count)
+make sim-vla-eval VLA_ONNX=runs/sweep-v0.0.2-1500-ep/lr1e-4_l2/best.onnx SCENARIO_SEED=0 N_SCENARIOS=5
 ```
 
 The `vla_node` logs which ONNX provider it is using on startup:
