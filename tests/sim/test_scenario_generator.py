@@ -490,42 +490,67 @@ class TestEpisodeRunnerFaceOrdering:
 # ---------------------------------------------------------------------------
 
 class TestEpisodeRunnerLabelKey:
-    """Verify label_key mapping: single_slow → 'slow', others → 'track'."""
+    """Verify _configure_oracle sets label_key and num_faces via two subprocess calls."""
 
-    def _setup_runner(self, label_key: str):
-        """Run setup() with the given label_key and return the subprocess.run call."""
+    def _setup_runner(self, label_key: str, n_faces: int = 1):
+        """Run setup() with the given label_key and return subprocess.run call list."""
         from unittest.mock import MagicMock, patch
         from sim.scenario_generator.episode_runner import EpisodeRunner
 
         mock_bridge = MagicMock()
         mock_bridge.setup_episode.return_value = None
 
-        face = _make_face_config(motion="sinusoidal", speed=0.1)
-        config = _make_scenario_config([face], label_key=label_key)
+        faces = [_make_face_config(motion="sinusoidal", speed=0.1) for _ in range(n_faces)]
+        config = _make_scenario_config(faces, label_key=label_key)
 
         runner = EpisodeRunner(mock_bridge)
         with patch("sim.scenario_generator.episode_runner.subprocess.run") as mock_run:
             runner.setup(config)
         return mock_run.call_args_list
 
+    def _find_param_call(self, calls, param_name: str):
+        """Return the CLI arg list for the call that sets param_name."""
+        for c in calls:
+            cmd = c[0][0]
+            if param_name in cmd:
+                return cmd
+        raise AssertionError(f"No subprocess call found for param {param_name!r}")
+
     def test_single_slow_maps_to_slow(self):
-        """label_key='single_slow' → oracle receives 'slow'."""
+        """label_key='single_slow' → oracle label_key='slow', num_faces=1."""
         calls = self._setup_runner("single_slow")
-        assert len(calls) == 1
-        cmd = calls[0][0][0]
-        assert "label_key" in cmd
-        assert cmd[-1] == "slow", f"Expected last arg 'slow', got {cmd[-1]!r}"
+        assert len(calls) == 2
+        assert self._find_param_call(calls, "label_key")[-1] == "slow"
+        assert self._find_param_call(calls, "num_faces")[-1] == "1"
 
     def test_single_centered_maps_to_track(self):
-        """label_key='single_centered' → oracle receives 'track'."""
+        """Unknown label_key falls back to 'track'."""
         calls = self._setup_runner("single_centered")
-        assert len(calls) == 1
-        cmd = calls[0][0][0]
-        assert cmd[-1] == "track", f"Expected last arg 'track', got {cmd[-1]!r}"
+        assert len(calls) == 2
+        assert self._find_param_call(calls, "label_key")[-1] == "track"
 
     def test_multi_attr_maps_to_track(self):
-        """label_key='multi_attr' → oracle receives 'track'."""
+        """label_key='multi_attr' → oracle label_key='track' (face_0 is always target)."""
         calls = self._setup_runner("multi_attr")
-        assert len(calls) == 1
-        cmd = calls[0][0][0]
-        assert cmd[-1] == "track"
+        assert len(calls) == 2
+        assert self._find_param_call(calls, "label_key")[-1] == "track"
+
+    def test_multi_left_passes_through(self):
+        """label_key='multi_left' → oracle receives 'multi_left'."""
+        calls = self._setup_runner("multi_left", n_faces=2)
+        assert len(calls) == 2
+        assert self._find_param_call(calls, "label_key")[-1] == "multi_left"
+        assert self._find_param_call(calls, "num_faces")[-1] == "2"
+
+    def test_multi_right_passes_through(self):
+        """label_key='multi_right' → oracle receives 'multi_right'."""
+        calls = self._setup_runner("multi_right", n_faces=2)
+        assert len(calls) == 2
+        assert self._find_param_call(calls, "label_key")[-1] == "multi_right"
+
+    def test_multi_closest_passes_through(self):
+        """label_key='multi_closest' → oracle receives 'multi_closest'."""
+        calls = self._setup_runner("multi_closest", n_faces=3)
+        assert len(calls) == 2
+        assert self._find_param_call(calls, "label_key")[-1] == "multi_closest"
+        assert self._find_param_call(calls, "num_faces")[-1] == "3"

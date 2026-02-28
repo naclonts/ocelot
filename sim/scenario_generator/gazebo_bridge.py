@@ -277,15 +277,15 @@ class GazeboBridge:
     def spawn_face(self, name: str, pos: tuple, texture_abs_path: str) -> bool:
         """Spawn a face billboard with the given texture at pos=(x, y, z).
 
-        Only face_0 receives the PosePublisher plugin — the oracle node
-        subscribes to /model/face_0/pose to track the primary target.
+        All faces receive the PosePublisher plugin so oracle_node can subscribe
+        to /model/face_N/pose and dynamically select the tracking target based
+        on the episode label_key (leftmost, rightmost, closest, etc.).
         """
-        plugin = _POSE_PUBLISHER_PLUGIN if name == "face_0" else ""
         sdf = _FACE_SDF.format(
             name=name,
             x=pos[0], y=pos[1], z=pos[2],
             texture_abs_path=texture_abs_path,
-            pose_publisher_plugin=plugin,
+            pose_publisher_plugin=_POSE_PUBLISHER_PLUGIN,
             ep=self._ep_id,
         )
         return self._spawn_sdf(sdf, _ENTITY_MODEL, name)

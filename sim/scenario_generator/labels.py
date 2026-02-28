@@ -54,7 +54,10 @@ LABEL_REGISTRY: dict[str, list[str]] = {
         "track the leftmost person",
         "watch the person on the left",
         "keep your eye on the person furthest left",
-        "the one on the left — follow them",
+        "look at whoever is on the left",
+        "follow whoever is on the left",
+        "track whoever is on the left",
+        "watch whoever is on the left",
     ],
 
     "multi_right": [
@@ -64,7 +67,10 @@ LABEL_REGISTRY: dict[str, list[str]] = {
         "track the rightmost person",
         "watch the person on the right",
         "keep your eye on the person furthest right",
-        "the one on the right — follow them",
+        "look at whoever is on the right",
+        "follow whoever is on the right",
+        "track whoever is on the right",
+        "watch whoever is on the right",
     ],
 
     # ── Multi-face: proximity ─────────────────────────────────────────────────

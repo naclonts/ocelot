@@ -121,11 +121,12 @@ def launch_setup(context, *args, **kwargs):
         output='screen',
     )
 
-    # Bridge Gazebo → ROS for simulation-time clock, camera image, and face pose.
+    # Bridge Gazebo → ROS for simulation-time clock, camera image, and face poses.
     # joint_state_broadcaster publishes /joint_states directly to ROS via
     # ros2_control — no additional bridge is needed for that topic.
-    # /model/face_0/pose: published by the PosePublisher plugin in model.sdf;
-    # gives oracle_node the ground-truth world position of the face billboard.
+    # /model/face_N/pose: published by the PosePublisher plugin on every spawned
+    # face billboard; oracle_node subscribes to all three so it can dynamically
+    # select the tracking target per-tick based on the episode label_key.
     bridge = Node(
         package='ros_gz_bridge',
         executable='parameter_bridge',
@@ -133,6 +134,8 @@ def launch_setup(context, *args, **kwargs):
             '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock',
             '/camera/image_raw@sensor_msgs/msg/Image[gz.msgs.Image',
             '/model/face_0/pose@geometry_msgs/msg/Pose[gz.msgs.Pose',
+            '/model/face_1/pose@geometry_msgs/msg/Pose[gz.msgs.Pose',
+            '/model/face_2/pose@geometry_msgs/msg/Pose[gz.msgs.Pose',
         ],
         output='screen',
     )
