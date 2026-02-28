@@ -68,12 +68,13 @@ def build_loaders(
     num_workers: int,
     tokenizer,
     max_episodes: int | None = None,
+    shards: list[int] | None = None,
 ) -> tuple[DataLoader, DataLoader]:
     """Build train and val DataLoaders backed by OcelotDataset."""
     collate = lambda b: OcelotDataset.collate_fn(b, tokenizer)  # noqa: E731
 
-    train_ds = OcelotDataset("train", dataset_dir, max_episodes=max_episodes)
-    val_ds   = OcelotDataset("val",   dataset_dir, max_episodes=max_episodes)
+    train_ds = OcelotDataset("train", dataset_dir, max_episodes=max_episodes, shards=shards)
+    val_ds   = OcelotDataset("val",   dataset_dir, max_episodes=max_episodes, shards=shards)
 
     train_loader = DataLoader(
         train_ds,
@@ -213,6 +214,8 @@ def parse_args() -> argparse.Namespace:
                    help="Mixed-precision training (fp16); halves VRAM, ~2× faster")
     p.add_argument("--max_episodes",    type=int,   default=None,
                    help="Cap total episodes per split (train and val); useful for fast sweep runs")
+    p.add_argument("--shards",          type=int,   nargs="+", default=None, metavar="N",
+                   help="Only train on these shard numbers (e.g. --shards 26 27 28 29 30 31)")
     p.add_argument("--experiment",      type=str,   default="ocelot",
                    help="MLflow experiment name")
     return p.parse_args()
@@ -236,14 +239,19 @@ def main() -> None:
 
     # DataLoaders
     log.info("Building DataLoaders from %s …", args.dataset_dir)
+    if args.shards is not None:
+        log.info("Shards: %s", args.shards)
     train_loader, val_loader = build_loaders(
         args.dataset_dir, args.batch_size, args.num_workers, tokenizer,
         max_episodes=args.max_episodes,
+        shards=args.shards,
     )
+    train_ds = train_loader.dataset
+    val_ds   = val_loader.dataset
     log.info(
-        "Dataset: %d train frames / %d val frames",
-        len(train_loader.dataset),
-        len(val_loader.dataset),
+        "Dataset: %d episodes / %d train frames — %d episodes / %d val frames",
+        train_ds.n_episodes, len(train_ds),
+        val_ds.n_episodes,   len(val_ds),
     )
 
     # Model
@@ -286,6 +294,7 @@ def main() -> None:
             "amp":             args.amp,
             "dataset_dir":     str(args.dataset_dir),
             "max_episodes":    args.max_episodes,
+            "shards":          str(args.shards) if args.shards else "all",
             "n_trainable":     n_trainable,
         })
 

@@ -62,6 +62,7 @@ class OcelotDataset(Dataset):
         dataset_dir: Path,
         transform=None,
         max_episodes: int | None = None,
+        shards: list[int] | None = None,
     ) -> None:
         if split not in ("train", "val", "test"):
             raise ValueError(f"split must be train/val/test, got {split!r}")
@@ -75,6 +76,13 @@ class OcelotDataset(Dataset):
 
         # Support both a flat layout (single shard) and a sharded layout.
         split_files = self._find_split_files(dataset_dir, split)
+        if shards is not None:
+            shard_set = set(shards)
+            split_files = [
+                p for p in split_files
+                if p.parent.name.startswith("shard_")
+                and int(p.parent.name.split("_", 1)[1]) in shard_set
+            ]
         if not split_files:
             raise FileNotFoundError(
                 f"No {split}.txt files found under {dataset_dir}"
@@ -92,6 +100,8 @@ class OcelotDataset(Dataset):
 
         if max_episodes is not None:
             all_episodes = all_episodes[:max_episodes]
+
+        self.n_episodes = len(all_episodes)
 
         for episodes_dir, ep_id in all_episodes:
             h5_path = episodes_dir / f"ep_{ep_id}.h5"
