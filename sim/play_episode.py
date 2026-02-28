@@ -40,10 +40,12 @@ def play(ep_path: Path, fps: int, save: Path | None) -> None:
 
     n_frames = frames.shape[0]
     scenario_id = ""
+    seed = None
     if meta_raw is not None:
         try:
             d = json.loads(meta_raw.decode() if isinstance(meta_raw, bytes) else meta_raw)
             scenario_id = d.get("scenario_id", "")
+            seed = d.get("seed")
         except Exception:
             pass
 
@@ -71,6 +73,14 @@ def play(ep_path: Path, fps: int, save: Path | None) -> None:
         # Build display frame (RGB → BGR for OpenCV)
         bgr = cv2.cvtColor(frames[i], cv2.COLOR_RGB2BGR)
         bgr = cv2.resize(bgr, (224 * scale, 224 * scale), interpolation=cv2.INTER_NEAREST)
+
+        # Seed overlay — top-right corner, discrete
+        if seed is not None:
+            seed_txt = f"seed {seed}"
+            (tw, th), _ = cv2.getTextSize(seed_txt, cv2.FONT_HERSHEY_SIMPLEX, 0.35, 1)
+            tx = bgr.shape[1] - tw - 5
+            cv2.putText(bgr, seed_txt, (tx, th + 4), cv2.FONT_HERSHEY_SIMPLEX, 0.35,
+                        (120, 120, 120), 1, cv2.LINE_AA)
 
         # Info bar
         bar = np.zeros((40, out_w, 3), dtype=np.uint8)

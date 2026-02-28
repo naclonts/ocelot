@@ -15,6 +15,7 @@ for _mod in (
     "cv_bridge",
     "geometry_msgs", "geometry_msgs.msg",
     "sensor_msgs", "sensor_msgs.msg",
+    "std_msgs", "std_msgs.msg",
 ):
     sys.modules.setdefault(_mod, mock.MagicMock())
 

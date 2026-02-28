@@ -16,9 +16,21 @@ Usage (inside the sim container, with sim_launch.py already running):
         --perturb_range 0.5 \\
         [--base_ep 0]
 
-    # Parallel sharding: each shard writes to <output>/shard_N/
+    # Parallel sharding — preferred: use collect_parallel.sh which handles
+    # ROS_DOMAIN_ID and GZ_PARTITION automatically.
+    #
+    # Manual equivalent (ROS_DOMAIN_ID must match between sim stack and collector;
+    # collect_data.py defaults to shard index if ROS_DOMAIN_ID is not already set):
+    #
+    # Step 1: launch one sim stack per shard (each in its own terminal or with &):
+    #   ROS_DOMAIN_ID=0 GZ_PARTITION=0 ros2 launch ocelot sim_launch.py world:=scenario_world use_oracle:=true headless:=true &
+    #   ROS_DOMAIN_ID=1 GZ_PARTITION=1 ros2 launch ocelot sim_launch.py world:=scenario_world use_oracle:=true headless:=true &
+    #   ROS_DOMAIN_ID=2 GZ_PARTITION=2 ros2 launch ocelot sim_launch.py world:=scenario_world use_oracle:=true headless:=true &
+    #   ROS_DOMAIN_ID=3 GZ_PARTITION=3 ros2 launch ocelot sim_launch.py world:=scenario_world use_oracle:=true headless:=true &
+    #
+    # Step 2: start the collectors with matching ROS_DOMAIN_ID:
     for i in 0 1 2 3; do
-        GZ_PARTITION=$i python3 /ws/src/ocelot/sim/data_gen/collect_data.py \\
+        ROS_DOMAIN_ID=$i GZ_PARTITION=$i python3 /ws/src/ocelot/sim/data_gen/collect_data.py \\
             --n_episodes 25000 --shard $i \\
             --output /ws/src/ocelot/sim/dataset &
     done
@@ -27,13 +39,14 @@ Usage (inside the sim container, with sim_launch.py already running):
         --parent /ws/src/ocelot/sim/dataset \\
         --output /ws/src/ocelot/sim/dataset/merged
 
-Prerequisite:
+Prerequisite (single-shard / development):
     ros2 launch ocelot sim_launch.py world:=scenario_world use_oracle:=true headless:=true
 """
 
 import argparse
 import json
 import logging
+import os
 import random
 import subprocess
 import sys
@@ -52,6 +65,8 @@ import numpy as np
 import rclpy
 from cv_bridge import CvBridge
 from geometry_msgs.msg import Twist
+from rcl_interfaces.msg import Parameter as RclParameter, ParameterType, ParameterValue
+from rcl_interfaces.srv import SetParameters
 from rclpy.node import Node
 from sensor_msgs.msg import Image, JointState
 from std_msgs.msg import String
@@ -76,6 +91,16 @@ FRAMES_PER_EPISODE = int(EPISODE_SECS * CAMERA_HZ)   # 100
 # Periodic perturbation — number of frames to hold each offset so the oracle
 # has time to produce a recovery trajectory before the face snaps back.
 PERTURB_DURATION   = 8       # frames — hold long enough for oracle to start responding
+
+# Maps scenario label keys to the oracle param value expected by oracle_node.
+# Mirrors the mapping previously in episode_runner._ORACLE_LABEL_MAP.
+_ORACLE_LABEL_MAP: dict[str, str] = {
+    "single_slow":  "slow",
+    "multi_attr":   "track",
+    "track":        "track",
+    "multi_left":   "multi_left",
+    "multi_right":  "multi_right",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -104,6 +129,14 @@ class CollectNode(Node):
         self._image_event = threading.Event()
 
         self._cmd_pub = self.create_publisher(String, '/episode/cmd', 1)
+
+        # Persistent service client for oracle parameter updates.
+        # Reuses the node's DDS connection — no subprocess / re-discovery
+        # overhead per episode, unlike the old 'ros2 param set' subprocess.
+        self._oracle_param_client = self.create_client(
+            SetParameters, '/oracle_node/set_parameters'
+        )
+        self._oracle_service_available = False  # cached after first wait_for_service
 
         self.create_subscription(Image,      "/camera/image_raw", self._on_image,        10)
         self.create_subscription(JointState, "/joint_states",     self._on_joint_states, 10)
@@ -163,6 +196,55 @@ class CollectNode(Node):
         if msg is None:
             return 0.0, 0.0
         return float(msg.angular.z), float(msg.angular.y)
+
+    def configure_oracle(self, label_key: str, num_faces: int,
+                         timeout: float = 10.0) -> None:
+        """Set oracle_node parameters via the ROS2 SetParameters service.
+
+        Uses this node's persistent service client — no subprocess spawn or
+        DDS re-discovery on each call.  Raises RuntimeError if the service is
+        unreachable or any parameter set fails.
+        """
+        oracle_label = _ORACLE_LABEL_MAP.get(label_key, "track")
+
+        if not self._oracle_service_available:
+            if not self._oracle_param_client.wait_for_service(timeout_sec=timeout):
+                raise RuntimeError(
+                    f"configure_oracle: /oracle_node/set_parameters not available "
+                    f"after {timeout:.0f} s — is oracle_node running?"
+                )
+            self._oracle_service_available = True
+
+        lk = RclParameter()
+        lk.name = 'label_key'
+        lk.value = ParameterValue(type=ParameterType.PARAMETER_STRING,
+                                  string_value=oracle_label)
+
+        nf = RclParameter()
+        nf.name = 'num_faces'
+        nf.value = ParameterValue(type=ParameterType.PARAMETER_INTEGER,
+                                  integer_value=num_faces)
+
+        req = SetParameters.Request()
+        req.parameters = [lk, nf]
+
+        future = self._oracle_param_client.call_async(req)
+
+        # The spin thread processes the response; poll until done.
+        deadline = time.monotonic() + timeout
+        while not future.done():
+            if time.monotonic() > deadline:
+                raise RuntimeError(
+                    f"configure_oracle: SetParameters call timed out after "
+                    f"{timeout:.0f} s (label_key={label_key!r}, num_faces={num_faces})"
+                )
+            time.sleep(0.01)
+
+        for r in future.result().results:
+            if not r.successful:
+                raise RuntimeError(
+                    f"configure_oracle: failed to set parameter: {r.reason}"
+                )
 
 
 # ---------------------------------------------------------------------------
@@ -356,8 +438,14 @@ def run_collection(node: CollectNode, args) -> None:
 
         log.info("ep %06d: setup  seed=%d  label=%r", ep_idx, seed, config.label_key)
 
+        # ── Oracle config ───────────────────────────────────────────────────
+        # Must succeed before spawning Gazebo entities.  Failure means the
+        # oracle will track the wrong face, corrupting the dataset — stop
+        # immediately rather than silently collecting bad data.
+        # Uses a persistent ROS2 service client (no subprocess / DDS re-discovery).
+        node.configure_oracle(config.label_key, len(config.faces))
+
         # ── Setup ──────────────────────────────────────────────────────────
-        # runner.setup() spawns Gazebo entities AND sets the oracle label key.
         try:
             runner.setup(config)
         except Exception as exc:
@@ -544,6 +632,15 @@ def main() -> None:
         if args.base_seed is None:
             args.base_seed = args.shard * args.n_episodes
         args.output = str(Path(args.output) / f"shard_{args.shard}")
+        # Ensure each shard has an isolated ROS domain so its /oracle_node
+        # only receives param-set calls from this process.  setdefault lets
+        # an explicitly-passed ROS_DOMAIN_ID (e.g. collect_parallel.sh's
+        # docker exec -e ROS_DOMAIN_ID=N) take precedence; the 10+shard
+        # fallback only applies when launching collect_data.py directly.
+        # subprocess calls in episode_runner._configure_oracle inherit this
+        # env var automatically.
+        os.environ.setdefault("ROS_DOMAIN_ID", str(args.shard))
+        log.info("shard %d: ROS_DOMAIN_ID=%s", args.shard, os.environ["ROS_DOMAIN_ID"])
     if args.base_seed is None:
         args.base_seed = 0
 

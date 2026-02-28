@@ -40,7 +40,7 @@ HOST_OUTPUT="${REPO_ROOT}/sim/dataset"
 echo "HOST_OUTPUT directory: $HOST_OUTPUT"
 
 if [[ -z "$START_SHARD" ]]; then
-    START_SHARD=0
+    START_SHARD=1
     if [[ -d "$HOST_OUTPUT" ]]; then
         for d in "$HOST_OUTPUT"/shard_*/; do
             [[ -d "$d" ]] || continue

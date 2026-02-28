@@ -42,6 +42,7 @@ Sign convention (matches cmd_vel_adapter and tracker_node):
 import numpy as np
 import rclpy
 from geometry_msgs.msg import Pose, Twist
+from rcl_interfaces.msg import SetParametersResult
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
 
@@ -109,7 +110,25 @@ class OracleNode(Node):
         # Joint states arrive at ~50 Hz from ros2_control.
         self.create_timer(0.05, self._control_loop)
 
+        # Reset face pose buffers whenever num_faces changes so stale poses
+        # from the previous episode don't contaminate target selection.
+        self.add_on_set_parameters_callback(self._on_params_changed)
+
         self.get_logger().info('Oracle node ready — set enabled:=true to activate')
+
+    # ── parameter change callback ───────────────────────────────────────────
+
+    def _on_params_changed(self, params) -> SetParametersResult:
+        for p in params:
+            if p.name == 'num_faces':
+                # New episode starting — reset all face pose buffers so stale
+                # poses from the previous episode don't pollute target selection.
+                for key in self._face_positions:
+                    self._face_positions[key] = None
+                self.get_logger().debug(
+                    f'num_faces → {p.value}: face pose buffers reset'
+                )
+        return SetParametersResult(successful=True)
 
     # ── callbacks ──────────────────────────────────────────────────────────
 

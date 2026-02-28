@@ -23,49 +23,11 @@ in sync with the camera topic.
 
 import logging
 import random
-import subprocess
 
 from sim.scenario_generator.motion import make_motion, RandomWalkMotion
 
 log = logging.getLogger(__name__)
 
-
-# Maps scenario label keys to the oracle param value.
-# multi_* keys are passed through so oracle_node can do per-tick target selection.
-# multi_attr always resolves to face_0 (the attribute target never changes).
-# Unknown keys (e.g. legacy "single_centered") fall back to "track".
-_ORACLE_LABEL_MAP: dict[str, str] = {
-    "single_slow":    "slow",
-    "multi_attr":     "track",
-    "track":          "track",
-    "multi_left":     "multi_left",
-    "multi_right":    "multi_right",
-}
-
-
-def _configure_oracle(label_key: str, num_faces: int) -> None:
-    """Configure /oracle_node params for the upcoming episode via ros2 param set.
-
-    Sets two parameters:
-        label_key — controls which face the oracle tracks each tick
-        num_faces — how many face_N pose topics to consider (prevents stale
-                    poses from a previous episode contaminating target selection)
-
-    No-op if the ros2 CLI is unavailable or oracle_node is not running.
-    """
-    oracle_label = _ORACLE_LABEL_MAP.get(label_key, "track")
-    for param, value in [
-        ("label_key", oracle_label),
-        ("num_faces", str(num_faces)),
-    ]:
-        try:
-            subprocess.run(
-                ["ros2", "param", "set", "/oracle_node", param, value],
-                capture_output=True,
-                timeout=2.0,
-            )
-        except Exception as exc:
-            log.debug("_configure_oracle: could not set %s: %s", param, exc)
 
 # Constant added to config.seed when constructing the episode-runner RNG.
 # Keeps this stream independent from the scenario-generator sampling stream.
@@ -105,10 +67,6 @@ class EpisodeRunner:
         Args:
             config: ScenarioConfig from sim.scenario_generator.scenario.
         """
-        # Configure the oracle node for this episode (best-effort; no-op if
-        # oracle is not running or ros2 CLI is unavailable).
-        _configure_oracle(config.label_key, len(config.faces))
-
         # Spawn all Gazebo entities (also tears down any previous episode).
         self._bridge.setup_episode(config)
 

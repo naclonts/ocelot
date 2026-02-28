@@ -179,8 +179,8 @@ def assign_label(
 
     Multi-face priority (first match wins):
         1. multi_attr   — target has distinguishing hat/glasses/beard
-        2. multi_left   — target is leftmost (min initial_y)
-           multi_right  — target is rightmost (max initial_y)
+        2. multi_left   — target is leftmost (max initial_y, world +Y = camera left)
+           multi_right  — target is rightmost (min initial_y)
         ScenarioGenerator guarantees the target is always leftmost or rightmost,
         so case 2 always matches when case 1 does not.
     """
@@ -200,10 +200,12 @@ def assign_label(
         return "multi_attr", template.format(attr=attr)
 
     # 2. Leftmost / rightmost by initial_y.
+    # In ROS/Gazebo with the robot facing +X, world +Y is to the LEFT, so the
+    # face with the LARGEST initial_y is the leftmost from the camera's POV.
     # ScenarioGenerator guarantees the target is always one of the two extremes
     # in multi-face scenarios, so one of these branches always matches.
     by_y = sorted(range(n), key=lambda i: faces[i].initial_y)
-    key = "multi_left" if by_y[0] == target_idx else "multi_right"
+    key = "multi_left" if by_y[-1] == target_idx else "multi_right"
 
     template = rng.choice(LABEL_REGISTRY[key])
     return key, template
