@@ -95,7 +95,7 @@ ATTR_DISPLAY: dict[str, str] = {
     "stubble":              "stubble",
     "beard":                "beard",
     "mustache":             "mustache",
-    "goatee":               "goatee",
+    "goatee":               "beard",
     "over_ear_headphones":  "headphones",
     "scarf":                "scarf",
 }
