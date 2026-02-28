@@ -90,6 +90,14 @@ def launch_setup(context, *args, **kwargs):
     )
     robot_description = robot_description.replace('</robot>', plugin_block + '</robot>')
 
+    # VLA eval starts from a slightly lower tilt than the default (-0.4 rad).
+    # The default works well for oracle/tracker runs; VLA runs start too nose-up.
+    if use_vla:
+        robot_description = robot_description.replace(
+            '<param name="initial_value">-0.4</param>',
+            '<param name="initial_value">-0.2</param>',
+        )
+
     # -r: run simulation immediately; -s: server only (no GUI) when headless
     gz_args = f'-r -s {world_file}' if headless == 'true' else f'-r {world_file}'
 

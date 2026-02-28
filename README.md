@@ -527,7 +527,8 @@ environment:
 ```
 
 #### X11 auth: container (root) refused by X server
-The container runs as root; `xhost +si:localuser:nathan` won't help. Use a wildcard xauth cookie instead. Run `make sim-xauth` once (re-run if the display session changes). The compose file mounts `/tmp/.docker.xauth` and sets `XAUTHORITY=/tmp/.docker.xauth`.
+
+Run `sudo make sim-xauth` once (re-run if the display session changes). The compose file mounts `/tmp/.docker.xauth` and sets `XAUTHORITY=/tmp/.docker.xauth`.
 
 #### `MESA: error: ZINK: vkCreateInstance failed` / software rendering
 The `jazzy-simulation` base image doesn't include Vulkan ICDs, so OGRE logs this and falls back to software OpenGL (llvmpipe). This is expected and harmless when running without the GPU overlay — the sim works but renders on CPU.

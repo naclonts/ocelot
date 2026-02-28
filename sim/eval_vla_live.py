@@ -23,6 +23,7 @@ import rclpy
 from geometry_msgs.msg import Pose
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
+from std_msgs.msg import String
 
 _root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_root))
@@ -66,6 +67,8 @@ class EvalNode(Node):
         self._face_received = threading.Event()
         self._joints_received = threading.Event()
 
+        self._cmd_pub = self.create_publisher(String, '/episode/cmd', 1)
+
         self.create_subscription(Pose, "/model/face_0/pose", self._face_cb, 10)
         self.create_subscription(JointState, "/joint_states", self._joint_cb, 10)
 
@@ -93,6 +96,12 @@ class EvalNode(Node):
                 elif name == "tilt_joint":
                     self._tilt_angle = msg.position[i]
         self._joints_received.set()
+
+    def publish_cmd(self, text: str) -> None:
+        """Publish the scenario language label to /episode/cmd."""
+        msg = String()
+        msg.data = text
+        self._cmd_pub.publish(msg)
 
     def wait_ready(self, timeout: float = 60.0) -> bool:
         """Block until /joint_states received (confirms ros2_control + VLA are up).
@@ -258,6 +267,7 @@ def main() -> None:
             f"Scenario {i + 1}/{args.n_scenarios}  "
             f"seed={seed}  motion={motion}  label={config.label_key}"
         )
+        node.publish_cmd(f"seed={seed} | {config.language_label}")
         result = eval_scenario(node, runner, config)
         result.update({"seed": seed, "motion": motion, "label": config.label_key})
         results.append(result)
