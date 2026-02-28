@@ -40,7 +40,6 @@ _ORACLE_LABEL_MAP: dict[str, str] = {
     "track":          "track",
     "multi_left":     "multi_left",
     "multi_right":    "multi_right",
-    "multi_closest":  "multi_closest",
 }
 
 

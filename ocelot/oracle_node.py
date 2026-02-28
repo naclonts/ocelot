@@ -172,9 +172,6 @@ class OracleNode(Node):
         elif label_key == 'multi_right':
             # Rightmost = most negative camera-frame Y.
             target = min(d_cams, key=lambda n: d_cams[n][1])
-        elif label_key == 'multi_closest':
-            # Closest = smallest Euclidean distance from camera origin.
-            target = min(d_cams, key=lambda n: float(np.linalg.norm(d_cams[n])))
         else:
             # track, multi_attr, slow, unknown: always face_0.
             target = 'face_0'

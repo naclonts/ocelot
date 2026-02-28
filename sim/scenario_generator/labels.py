@@ -73,18 +73,6 @@ LABEL_REGISTRY: dict[str, list[str]] = {
         "watch whoever is on the right",
     ],
 
-    # ── Multi-face: proximity ─────────────────────────────────────────────────
-
-    "multi_closest": [
-        "look at the closest person",
-        "look at whoever is nearest",
-        "watch the closest person",
-        "track the closest person",
-        "follow the nearest one",
-        "keep the person closest to you centered",
-        "focus on the closest face",
-        "stay with the one right in front of you",
-    ],
 }
 
 
@@ -190,10 +178,11 @@ def assign_label(
     Single-face: always returns ("track", "track the face") — no disambiguation needed.
 
     Multi-face priority (first match wins):
-        1. multi_attr    — target has distinguishing hat/glasses/beard
-        2. multi_left    — target is leftmost (min initial_y)
-           multi_right   — target is rightmost (max initial_y)
-        3. multi_closest — fallback
+        1. multi_attr   — target has distinguishing hat/glasses/beard
+        2. multi_left   — target is leftmost (min initial_y)
+           multi_right  — target is rightmost (max initial_y)
+        ScenarioGenerator guarantees the target is always leftmost or rightmost,
+        so case 2 always matches when case 1 does not.
     """
     target = faces[target_idx]
     n = len(faces)
@@ -210,15 +199,11 @@ def assign_label(
         template = rng.choice(LABEL_REGISTRY["multi_attr"])
         return "multi_attr", template.format(attr=attr)
 
-    # 2. Leftmost / rightmost by initial_y
+    # 2. Leftmost / rightmost by initial_y.
+    # ScenarioGenerator guarantees the target is always one of the two extremes
+    # in multi-face scenarios, so one of these branches always matches.
     by_y = sorted(range(n), key=lambda i: faces[i].initial_y)
-    if by_y[0] == target_idx:
-        key = "multi_left"
-    elif by_y[-1] == target_idx:
-        key = "multi_right"
-    else:
-        # 3. Closest (min initial_x) — or fallback if also not closest
-        key = "multi_closest"
+    key = "multi_left" if by_y[0] == target_idx else "multi_right"
 
     template = rng.choice(LABEL_REGISTRY[key])
     return key, template

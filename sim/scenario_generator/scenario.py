@@ -173,7 +173,17 @@ class ScenarioGenerator:
                 period=rng.uniform(6.0, 20.0),
             ))
 
-        target_face_idx = rng.randint(0, len(faces) - 1)
+        # For multi-face scenarios, constrain the target to be the leftmost or
+        # rightmost face by initial_y.  This guarantees assign_label() always
+        # finds a position-based label (multi_left / multi_right) — or an
+        # attribute-based one if the face happens to have a distinguishing
+        # attribute.  A target in the middle of 3 faces with no attribute
+        # cannot be described unambiguously, so we never produce that case.
+        if n_faces > 1:
+            by_y = sorted(range(n_faces), key=lambda i: faces[i].initial_y)
+            target_face_idx = rng.choice([by_y[0], by_y[-1]])
+        else:
+            target_face_idx = 0
 
         # ── Background ───────────────────────────────────────────────────────
         bg = rng.choice(self._backgrounds)

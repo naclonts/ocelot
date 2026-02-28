@@ -18,6 +18,7 @@ from cv_bridge import CvBridge
 from geometry_msgs.msg import Twist
 from rclpy.node import Node
 from sensor_msgs.msg import Image, RegionOfInterest
+from std_msgs.msg import String
 import cv2
 
 # Colours (BGR)
@@ -37,10 +38,12 @@ class VisualizerNode(Node):
         self._bridge       = CvBridge()
         self._latest_twist = Twist()
         self._latest_roi   = RegionOfInterest()  # width==0 → no face
+        self._latest_cmd   = ''
 
         self.create_subscription(Image,           '/camera/image_raw',    self._image_cb, 10)
         self.create_subscription(Twist,           '/cmd_vel',             self._cmd_vel_cb, 10)
         self.create_subscription(RegionOfInterest, '/tracking/face_roi',  self._roi_cb, 10)
+        self.create_subscription(String,          '/episode/cmd',         self._cmd_cb, 1)
         self._pub = self.create_publisher(Image, '/camera/image_annotated', 10)
 
         self.get_logger().info('Visualizer node started → /camera/image_annotated')
@@ -50,6 +53,9 @@ class VisualizerNode(Node):
 
     def _roi_cb(self, msg: RegionOfInterest):
         self._latest_roi = msg
+
+    def _cmd_cb(self, msg: String):
+        self._latest_cmd = msg.data
 
     def _image_cb(self, msg: Image):
         frame = self._bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
@@ -97,6 +103,11 @@ class VisualizerNode(Node):
                     (8, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, _YELLOW, 1, cv2.LINE_AA)
         cv2.putText(frame, f'tilt {twist.angular.y:+.2f}',
                     (8, 42), cv2.FONT_HERSHEY_SIMPLEX, 0.5, _YELLOW, 1, cv2.LINE_AA)
+
+        # --- episode command overlay (bottom-left) ---
+        if self._latest_cmd:
+            cv2.putText(frame, self._latest_cmd,
+                        (8, h - 12), cv2.FONT_HERSHEY_SIMPLEX, 0.45, _WHITE, 1, cv2.LINE_AA)
 
         out = self._bridge.cv2_to_imgmsg(frame, encoding='bgr8')
         out.header = msg.header

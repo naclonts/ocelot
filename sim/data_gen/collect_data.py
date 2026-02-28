@@ -54,6 +54,7 @@ from cv_bridge import CvBridge
 from geometry_msgs.msg import Twist
 from rclpy.node import Node
 from sensor_msgs.msg import Image, JointState
+from std_msgs.msg import String
 
 logging.basicConfig(
     level=logging.INFO,
@@ -102,6 +103,8 @@ class CollectNode(Node):
         # frame rather than immediately returning a stale one.
         self._image_event = threading.Event()
 
+        self._cmd_pub = self.create_publisher(String, '/episode/cmd', 1)
+
         self.create_subscription(Image,      "/camera/image_raw", self._on_image,        10)
         self.create_subscription(JointState, "/joint_states",     self._on_joint_states, 10)
         self.create_subscription(Twist,      "/cmd_vel",          self._on_cmd_vel,      10)
@@ -141,6 +144,12 @@ class CollectNode(Node):
         if msg is None:
             return None
         return self._cv_bridge.imgmsg_to_cv2(msg, "rgb8")
+
+    def publish_cmd(self, text: str) -> None:
+        """Publish the episode language label to /episode/cmd."""
+        msg = String()
+        msg.data = text
+        self._cmd_pub.publish(msg)
 
     def get_pan_tilt_vel(self) -> tuple[float, float]:
         """Return (pan_vel, tilt_vel) from the latest /cmd_vel.
@@ -354,6 +363,8 @@ def run_collection(node: CollectNode, args) -> None:
         except Exception as exc:
             log.warning("ep %06d: setup failed: %s — skipping", ep_idx, exc)
             continue
+
+        node.publish_cmd(config.language_label)
 
         # Per-episode numpy RNG for augmentation; seeded independently of the
         # scenario-generator stream so augmentation is reproducible.

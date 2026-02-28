@@ -548,9 +548,3 @@ class TestEpisodeRunnerLabelKey:
         assert len(calls) == 2
         assert self._find_param_call(calls, "label_key")[-1] == "multi_right"
 
-    def test_multi_closest_passes_through(self):
-        """label_key='multi_closest' → oracle receives 'multi_closest'."""
-        calls = self._setup_runner("multi_closest", n_faces=3)
-        assert len(calls) == 2
-        assert self._find_param_call(calls, "label_key")[-1] == "multi_closest"
-        assert self._find_param_call(calls, "num_faces")[-1] == "3"
