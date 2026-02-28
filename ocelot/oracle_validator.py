@@ -9,8 +9,8 @@ The oracle's goal is to drive that error to zero, so pixel distance from center
 IS the tracking error.
 
 Camera intrinsics (derived from urdf/pan_tilt.urdf):
-    width=640, height=480, horizontal_fov=1.0472 rad (60°)
-    fx = fy = (w/2) / tan(hfov/2) = 320 / tan(0.5236) ≈ 554.3
+    width=640, height=480, horizontal_fov=2.0944 rad (120°)
+    fx = fy = (w/2) / tan(hfov/2) = 320 / tan(1.0472) ≈ 184.8
     cx=320, cy=240
 
 Camera frame convention (camera_link, rpy=0,0,0 on tilt_link):
@@ -37,8 +37,8 @@ from sensor_msgs.msg import JointState
 
 # ── Camera intrinsics (from urdf/pan_tilt.urdf) ───────────────────────────────
 _W, _H = 640, 480
-_HFOV = 1.0472  # radians (60°)
-_FX = _FY = (_W / 2) / math.tan(_HFOV / 2)   # ≈ 554.3 px
+_HFOV = 2.0944  # radians (120°)
+_FX = _FY = (_W / 2) / math.tan(_HFOV / 2)   # ≈ 184.8 px
 _CX, _CY = _W / 2, _H / 2                     # 320, 240
 
 # ── FK constants (must match oracle_node.py and urdf/pan_tilt.urdf) ──────────

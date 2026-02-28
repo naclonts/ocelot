@@ -156,8 +156,8 @@ def main() -> None:
                     break
         if cascade_path:
             cascade = cv2.CascadeClassifier(cascade_path)
-            # Simulate ~76 px rendering at 2 m (640×480, 60° FOV)
-            thumb = cv2.resize(face, (76, 76))
+            # Simulate ~28 px rendering at 2 m (640×480, 120° FOV)
+            thumb = cv2.resize(face, (28, 28))
             gray = cv2.cvtColor(thumb, cv2.COLOR_BGR2GRAY)
             faces = cascade.detectMultiScale(gray, 1.05, 1, minSize=(20, 20))
             detected = len(faces) > 0

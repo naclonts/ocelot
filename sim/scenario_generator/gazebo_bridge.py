@@ -111,7 +111,7 @@ _BACKGROUND_SDF = """\
     <link name="link">
       <visual name="wall_visual_{ep}">
         <geometry>
-          <box><size>0.002 12.0 12.0</size></box>
+          <box><size>0.002 20.0 20.0</size></box>
         </geometry>
         <material>
           <ambient>1.0 1.0 1.0 1</ambient>
@@ -323,8 +323,8 @@ class GazeboBridge:
     def spawn_background(self, background_abs_path: str) -> bool:
         """Despawn any existing background_wall, then spawn one with the given texture.
 
-        Geometry: 0.002 × 120.0 × 40.0 m box at x=50, z=20.  At 50 m with a
-        60° HFOV the wall subtends the full frame, reading as a distant backdrop
+        Geometry: 0.002 × 20.0 × 20.0 m box at x=5.  At 5 m with a
+        120° HFOV the wall subtends the full frame, reading as a distant backdrop
         rather than a visible foreground object.
         """
         if "background_wall" in self._spawned:

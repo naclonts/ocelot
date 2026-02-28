@@ -619,7 +619,7 @@ def main() -> None:
         "--perturb_range", type=float, default=0.45,
         help=(
             "Half-range of the uniform angular perturbation in radians. "
-            "Camera half-FOV is ~0.524 rad (30°); default 0.45 keeps face in frame. "
+            "Camera half-FOV is ~1.047 rad (60°); default 0.45 keeps face in frame. "
             "Default: 0.45."
         ),
     )
