@@ -46,6 +46,7 @@ Prerequisite (single-shard / development):
 import argparse
 import json
 import logging
+import math
 import os
 import random
 import subprocess
@@ -91,6 +92,12 @@ FRAMES_PER_EPISODE = int(EPISODE_SECS * CAMERA_HZ)   # 100
 # Periodic perturbation — number of frames to hold each offset so the oracle
 # has time to produce a recovery trajectory before the face snaps back.
 PERTURB_DURATION   = 8       # frames — hold long enough for oracle to start responding
+
+# FOV clamping for perturbations: keep at least half the face billboard in frame.
+# Horizontal: 25° (30° full half-FOV − 5° margin); vertical: 20° (23.4° − 3.4°).
+_PERTURB_FOV_H = math.radians(25)
+_PERTURB_FOV_V = math.radians(20)
+_CAM_Z         = 0.07   # approximate camera z in world coords (m)
 
 # Maps scenario label keys to the oracle param value expected by oracle_node.
 # Mirrors the mapping previously in episode_runner._ORACLE_LABEL_MAP.
@@ -295,12 +302,15 @@ class PerturbController:
         if self._frames_left > 0:
             face_pos = positions.get("face_0")
             if face_pos is not None:
-                set_pose_fn(
-                    "face_0",
-                    face_pos[0],
-                    face_pos[1] + self._y_offset,
-                    max(face_pos[2] + self._z_offset, 0.1),
-                )
+                face_x = max(face_pos[0], 0.5)
+                new_y  = face_pos[1] + self._y_offset
+                new_z  = face_pos[2] + self._z_offset
+                # Clamp to camera FOV so at least half the face remains visible.
+                y_lim = face_x * np.tan(_PERTURB_FOV_H)
+                new_y = float(np.clip(new_y, -y_lim, y_lim))
+                dz    = face_x * np.tan(_PERTURB_FOV_V)
+                new_z = float(np.clip(new_z, max(0.1, _CAM_Z - dz), _CAM_Z + dz))
+                set_pose_fn("face_0", face_pos[0], new_y, new_z)
                 self._frames_left -= 1
                 return True
         return False

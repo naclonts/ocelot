@@ -8,11 +8,22 @@ All patterns share the interface:
 World bounds enforced by all patterns:
     x: unchanged (constant depth)
     y: [-1.0, 1.0]
-    z: [ 0.3, 1.7]
+    z: [0.3, _CAM_Z + x0*tan(_FOV_HALF_V)]  — FOV-based, depth-dependent
 """
 
 import math
 import random
+
+# Vertical camera FOV safety margin — 20° keeps faces in the top 87% of frame
+# height at any depth, leaving a clear margin below the full 23.4° half-VFOV.
+_FOV_HALF_V = math.radians(20)
+_CAM_Z      = 0.07   # camera z in world coords (m)
+
+
+def _fov_z_bounds(x0: float):
+    """Return (z_lo, z_hi) keeping the face within vertical FOV at depth x0."""
+    dz = x0 * math.tan(_FOV_HALF_V)
+    return max(0.3, _CAM_Z - dz), min(1.7, _CAM_Z + dz)
 
 
 class MotionPattern:
@@ -62,13 +73,15 @@ class SinusoidalMotion(MotionPattern):
         self._x0 = self._y0 = self._z0 = 0.0
 
     def reset(self, x0: float, y0: float, z0: float) -> None:
-        self._x0, self._y0, self._z0 = x0, y0, z0
+        self._z_lo, self._z_hi = _fov_z_bounds(x0)
+        self._x0, self._y0 = x0, y0
+        self._z0 = max(self._z_lo, min(self._z_hi, z0))
 
     def step(self, t: float) -> tuple:
         y = self._y0 + self.amp_y * math.sin(2.0 * math.pi * t / self.period_y)
         z = self._z0 + self.amp_z * math.sin(2.0 * math.pi * t / self.period_z)
         y = max(-1.0, min(1.0, y))
-        z = max(0.3, min(1.7, z))
+        z = max(self._z_lo, min(self._z_hi, z))
         return (self._x0, y, z)
 
 
@@ -113,11 +126,13 @@ class LinearDriftMotion(MotionPattern):
         self._x0 = self._y0 = self._z0 = 0.0
 
     def reset(self, x0: float, y0: float, z0: float) -> None:
-        self._x0, self._y0, self._z0 = x0, y0, z0
+        self._z_lo, self._z_hi = _fov_z_bounds(x0)
+        self._x0, self._y0 = x0, y0
+        self._z0 = max(self._z_lo, min(self._z_hi, z0))
 
     def step(self, t: float) -> tuple:
         y = _reflect_1d(self._y0, self.vy, t, -1.0, 1.0)
-        z = _reflect_1d(self._z0, self.vz, t,  0.3, 1.7)
+        z = _reflect_1d(self._z0, self.vz, t, self._z_lo, self._z_hi)
         return (self._x0, y, z)
 
 
@@ -151,9 +166,10 @@ class RandomWalkMotion(MotionPattern):
         self._t_integrated = 0.0
 
     def reset(self, x0: float, y0: float, z0: float) -> None:
+        self._z_lo, self._z_hi = _fov_z_bounds(x0)
         self._x0 = x0
         self._y = y0
-        self._z = z0
+        self._z = max(self._z_lo, min(self._z_hi, z0))
         self._vy = 0.0
         self._vz = 0.0
         self._rng = random.Random(self._seed)
@@ -181,15 +197,15 @@ class RandomWalkMotion(MotionPattern):
                 ny = -2.0 - ny
                 self._vy = abs(self._vy)
 
-            if nz > 1.7:
-                nz = 3.4 - nz
+            if nz > self._z_hi:
+                nz = 2.0 * self._z_hi - nz
                 self._vz = -abs(self._vz)
-            elif nz < 0.3:
-                nz = 0.6 - nz
+            elif nz < self._z_lo:
+                nz = 2.0 * self._z_lo - nz
                 self._vz = abs(self._vz)
 
             self._y = max(-1.0, min(1.0, ny))
-            self._z = max(0.3, min(1.7, nz))
+            self._z = max(self._z_lo, min(self._z_hi, nz))
             self._t_integrated += dt
 
         return (self._x0, self._y, self._z)

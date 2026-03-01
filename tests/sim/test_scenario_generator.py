@@ -7,6 +7,7 @@ Run with:  pytest tests/sim/ -v
 """
 
 import json
+import math
 import random
 from pathlib import Path
 
@@ -28,6 +29,7 @@ from sim.scenario_generator.motion import (
     SinusoidalMotion,
     LinearDriftMotion,
     RandomWalkMotion,
+    _fov_z_bounds,
 )
 
 
@@ -202,7 +204,12 @@ class TestBoundsAndDistributions:
             for face in cfg.faces:
                 assert 2.0 <= face.initial_x <= 4.0, f"initial_x out of range: {face.initial_x}"
                 assert -1.0 <= face.initial_y <= 1.0
-                assert 0.5 <= face.initial_z <= 1.5
+                z_lo, z_hi = _fov_z_bounds(face.initial_x)
+                z_hi = min(z_hi, 1.5)
+                assert z_lo <= face.initial_z <= z_hi, (
+                    f"initial_z={face.initial_z:.3f} outside FOV range "
+                    f"[{z_lo:.3f}, {z_hi:.3f}] at x={face.initial_x:.2f}"
+                )
                 assert 0.05 <= face.speed <= 0.5
                 assert 6.0 <= face.period <= 20.0
                 assert face.motion in ("static", "linear_drift", "sinusoidal", "random_walk")
@@ -292,12 +299,14 @@ class TestJsonRoundTrip:
 class TestMotionPatterns:
 
     Y_LO, Y_HI = -1.0, 1.0
-    Z_LO, Z_HI = 0.3, 1.7
 
     def _assert_in_bounds(self, pos, label=""):
         x, y, z = pos
+        z_lo, z_hi = _fov_z_bounds(x)
         assert self.Y_LO <= y <= self.Y_HI, f"{label} y={y} out of bounds"
-        assert self.Z_LO <= z <= self.Z_HI, f"{label} z={z} out of bounds"
+        assert z_lo <= z <= z_hi, (
+            f"{label} z={z:.4f} outside FOV bounds [{z_lo:.4f}, {z_hi:.4f}] at x={x}"
+        )
 
     def test_static_motion(self):
         m = StaticMotion()
@@ -307,19 +316,19 @@ class TestMotionPatterns:
 
     def test_sinusoidal_motion(self):
         m = SinusoidalMotion(speed=0.3, period_y=10.0)
-        m.reset(2.0, 0.0, 1.0)
+        m.reset(2.0, 0.0, 0.5)
         for t in range(61):
             self._assert_in_bounds(m.step(t), f"sinusoidal t={t}")
 
     def test_linear_drift_motion(self):
         m = LinearDriftMotion(vy=0.2, vz=0.1)
-        m.reset(2.0, 0.0, 1.0)
+        m.reset(2.0, 0.0, 0.5)
         for t in range(61):
             self._assert_in_bounds(m.step(t), f"linear_drift t={t}")
 
     def test_random_walk_motion(self):
         m = RandomWalkMotion(speed=0.3, tau=3.0, seed=42)
-        m.reset(2.0, 0.0, 1.0)
+        m.reset(2.0, 0.0, 0.5)
         for t in range(0, 61):
             self._assert_in_bounds(m.step(t), f"random_walk t={t}")
 
@@ -332,7 +341,7 @@ class TestMotionPatterns:
             RandomWalkMotion(speed=0.5, tau=3.0, seed=0),
         ]
         for p in patterns:
-            p.reset(2.0, 0.3, 1.0)
+            p.reset(2.0, 0.3, 0.5)
             for t_tenth in range(601):  # 0.0 to 60.0 in 0.1 s steps
                 pos = p.step(t_tenth / 10.0)
                 self._assert_in_bounds(pos, type(p).__name__)
@@ -340,18 +349,18 @@ class TestMotionPatterns:
     def test_linear_drift_analytical_correctness(self):
         """LinearDrift at t=0 returns initial position; x never changes."""
         m = LinearDriftMotion(vy=0.3, vz=0.1)
-        m.reset(1.5, 0.2, 0.8)
+        m.reset(1.5, 0.2, 0.5)
         x, y, z = m.step(0.0)
         assert x == 1.5
         assert abs(y - 0.2) < 1e-9
-        assert abs(z - 0.8) < 1e-9
+        assert abs(z - 0.5) < 1e-9
 
     def test_random_walk_reproducible(self):
         """Same seed gives the same trajectory from reset."""
         m1 = RandomWalkMotion(speed=0.2, seed=7)
         m2 = RandomWalkMotion(speed=0.2, seed=7)
-        m1.reset(2.0, 0.0, 1.0)
-        m2.reset(2.0, 0.0, 1.0)
+        m1.reset(2.0, 0.0, 0.5)
+        m2.reset(2.0, 0.0, 0.5)
         for t in [1, 5, 10, 30, 60]:
             assert m1.step(t) == m2.step(t), f"Mismatch at t={t}"
 

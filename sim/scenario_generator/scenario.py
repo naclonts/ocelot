@@ -14,18 +14,23 @@ Standard project layout assumed:
 
 import hashlib
 import json
+import math
 import random
 from dataclasses import dataclass, asdict
 from pathlib import Path
+
+# Keep faces within camera vertical FOV — same constants as motion.py.
+_VFOV_HALF = math.radians(20)
+_CAM_Z     = 0.07   # camera z in world coords (m)
 
 
 @dataclass
 class FaceConfig:
     face_id:      str    # "face_042" — stem of PNG in sim/assets/faces/
     texture_path: str    # absolute path, resolved at sample time
-    initial_x:    float  # distance in front of robot [1.0–3.0 m]
+    initial_x:    float  # distance in front of robot [2.0–4.0 m]
     initial_y:    float  # lateral offset [-1.0–1.0 m]
-    initial_z:    float  # height [0.5–1.5 m]
+    initial_z:    float  # height — depth-dependent FOV range, floor 0.3 m
     motion:       str    # static | linear_drift | sinusoidal | random_walk
     speed:        float  # m/s [0.05–0.5] — peak velocity for all patterns
     period:       float  # seconds [6.0–20.0] — sinusoidal; ignored otherwise
@@ -160,12 +165,16 @@ class ScenarioGenerator:
             texture_path = str(
                 (self._faces_assets_dir / f"{fid}.png").resolve()
             )
+            face_x = rng.uniform(2.0, 4.0)
+            face_y = rng.uniform(-1.0, 1.0)
+            _dz    = face_x * math.tan(_VFOV_HALF)
+            face_z = rng.uniform(max(0.3, _CAM_Z - _dz), min(1.5, _CAM_Z + _dz))
             faces.append(FaceConfig(
                 face_id=fid,
                 texture_path=texture_path,
-                initial_x=rng.uniform(2.0, 4.0),
-                initial_y=rng.uniform(-1.0, 1.0),
-                initial_z=rng.uniform(0.5, 1.5),
+                initial_x=face_x,
+                initial_y=face_y,
+                initial_z=face_z,
                 motion=rng.choices(
                     self._MOTION_TYPES, weights=self._MOTION_WEIGHTS, k=1
                 )[0],

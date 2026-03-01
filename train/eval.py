@@ -337,7 +337,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--dataset_dir",  required=True, type=Path)
     p.add_argument("--split",        default="val", choices=["val", "test"])
     p.add_argument("--batch_size",   type=int, default=64)
-    p.add_argument("--num_workers",  type=int, default=4)
+    p.add_argument("--num_workers",  type=int, default=8)
     p.add_argument("--n_fusion_layers", type=int, default=2)
     p.add_argument("--n_heads",      type=int, default=6)
     p.add_argument("--plot",         action="store_true", help="Save scatter.png")
