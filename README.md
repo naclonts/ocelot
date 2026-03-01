@@ -75,23 +75,6 @@ Verify tracking is working from a second shell in the container:
 ros2 topic echo /joint_states --field position   # pan/tilt positions should change
 ```
 
-#### Oracle mode
-
-The oracle uses ground-truth face pose from Gazebo (no camera/detector) to drive the joints via closed-form FK. Use it instead of the Haar cascade tracker:
-
-```bash
-make sim-shell   # or: docker compose -f deploy/docker/docker-compose.sim.yml run --rm sim bash
-
-# Inside container — terminal 1
-colcon build --symlink-install --packages-select ocelot
-ros2 launch ocelot sim_launch.py use_oracle:=true headless:=true
-```
-
-Measure tracking error in a second shell in the same container:
-```bash
-ros2 run ocelot oracle_validator
-```
-
 #### Episode runner (scenario generator)
 
 The episode runner generates randomized scenarios — face textures, background, lighting, motion
@@ -146,8 +129,7 @@ gz light --list   # should be empty
 `/ws/src/ocelot/sim/dataset` (bind-mounted to `sim/dataset/` on the host).
 
 ```bash
-# Fresh dataset — 4 shards × 100 episodes
-bash sim/data_gen/collect_parallel.sh --shards 4 --episodes 100
+bash sim/data_gen/collect_parallel.sh --shards 7 --episodes 700
 ```
 
 The script auto-detects the next unused shard index from the output directory, so re-running
