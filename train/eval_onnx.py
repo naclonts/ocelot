@@ -124,6 +124,57 @@ def _build_tokenize_fn(token_cache_path: Path | None):
 
 
 # ---------------------------------------------------------------------------
+# Stratified episode sampler
+# ---------------------------------------------------------------------------
+
+def _stratified_sample(
+    episode_paths: list[tuple[str, Path]],
+    n_max: int,
+    stratified: bool,
+    seed: int = 0,
+) -> list[tuple[str, Path]]:
+    """Return at most *n_max* episodes from *episode_paths*.
+
+    If *stratified* is True, episodes are grouped by their ``label_key``
+    attribute and sampled proportionally, guaranteeing at least one episode
+    per group (or all episodes when a group is smaller than the quota).
+    """
+    rng = np.random.default_rng(seed)
+
+    if not stratified or n_max >= len(episode_paths):
+        if n_max >= len(episode_paths):
+            return list(episode_paths)
+        idx = rng.choice(len(episode_paths), size=n_max, replace=False)
+        return [episode_paths[i] for i in sorted(idx)]
+
+    # First pass: read label_key from each HDF5 (single attribute, fast)
+    groups: dict[str, list[tuple[str, Path]]] = {}
+    for ep_id, h5_path in episode_paths:
+        with h5py.File(h5_path, "r") as f:
+            lk_raw = f["label_key"][()]
+        lk = lk_raw.decode("utf-8") if isinstance(lk_raw, bytes) else str(lk_raw)
+        groups.setdefault(lk, []).append((ep_id, h5_path))
+
+    n_groups = len(groups)
+    per_group = max(1, n_max // n_groups)
+
+    sampled: list[tuple[str, Path]] = []
+    remainder: list[tuple[str, Path]] = []
+    for eps in groups.values():
+        eps_list = list(eps)
+        rng.shuffle(eps_list)
+        sampled.extend(eps_list[:per_group])
+        remainder.extend(eps_list[per_group:])
+
+    # Fill remaining budget from leftover episodes
+    if len(sampled) < n_max and remainder:
+        rng.shuffle(remainder)
+        sampled.extend(remainder[:n_max - len(sampled)])
+
+    return sampled[:n_max]
+
+
+# ---------------------------------------------------------------------------
 # Core evaluation loop
 # ---------------------------------------------------------------------------
 
@@ -135,11 +186,20 @@ def run_eval(
     token_cache_path: Path | None = None,
     mse_threshold: float = MSE_THRESHOLD,
     per_label_limit: float = PER_LABEL_LIMIT,
+    max_episodes: int | None = None,
+    stratified: bool = False,
+    seed: int = 0,
 ) -> dict:
     """Run offline evaluation and return a report dict.
 
     The returned dict is JSON-serialisable and contains a boolean ``pass``
     key indicating whether the model cleared both gate thresholds.
+
+    Args:
+        max_episodes: If set, evaluate at most this many episodes.
+        stratified: When True (and max_episodes is set), sample proportionally
+            across label_key groups so every label type is represented.
+        seed: RNG seed for reproducible sampling.
     """
     import onnxruntime as ort
 
@@ -168,6 +228,14 @@ def run_eval(
 
     if not episode_paths:
         raise RuntimeError(f"No episode HDF5 files found for split={split!r}")
+
+    # Optional subsetting (for fast CI runs)
+    if max_episodes is not None and max_episodes < len(episode_paths):
+        episode_paths = _stratified_sample(episode_paths, max_episodes, stratified, seed)
+        log.info(
+            "Subsampled to %d/%d episodes (stratified=%s, seed=%d)",
+            len(episode_paths), len(episode_paths), stratified, seed,
+        )
 
     log.info("Evaluating %d episodes (%s split) …", len(episode_paths), split)
 
@@ -267,8 +335,14 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--batch_size",    type=int, default=64)
     p.add_argument("--token_cache",   type=Path, default=None,
                    help="Precomputed token cache JSON from export_onnx.py")
-    p.add_argument("--mse_threshold", type=float, default=MSE_THRESHOLD,
+    p.add_argument("--mse_threshold",  type=float, default=MSE_THRESHOLD,
                    help=f"Overall MSE pass threshold (default: {MSE_THRESHOLD})")
+    p.add_argument("--max_episodes",  type=int, default=None,
+                   help="Evaluate at most this many episodes (default: all)")
+    p.add_argument("--stratified",    action="store_true",
+                   help="Stratify sampling by label_key (requires --max_episodes)")
+    p.add_argument("--seed",          type=int, default=0,
+                   help="RNG seed for reproducible episode sampling (default: 0)")
     return p.parse_args()
 
 
@@ -287,6 +361,9 @@ def main() -> None:
         batch_size=args.batch_size,
         token_cache_path=args.token_cache,
         mse_threshold=args.mse_threshold,
+        max_episodes=args.max_episodes,
+        stratified=args.stratified,
+        seed=args.seed,
     )
 
     out_path = args.output or args.model_path.with_name(
@@ -301,7 +378,7 @@ def main() -> None:
     print(f"  Episodes:    {report['n_episodes']}")
     print(f"  Overall MSE: {report['overall_mse']:.5f}  (threshold: {report['mse_threshold']})")
     if report["per_label_mse"]:
-        print(f"  Per-label MSE:")
+        print("  Per-label MSE:")
         for lk, mse in sorted(report["per_label_mse"].items()):
             flag = "  !" if mse >= report["per_label_limit"] else "   "
             print(f"    {flag} {lk:30s}: {mse:.5f}")

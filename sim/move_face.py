@@ -65,7 +65,7 @@ def set_pose(x: float, y: float, z: float) -> None:
     result, _rep = _node.request(SERVICE, req, Pose, Boolean, 500)
     if result != _last_result:
         if result:
-            print(f'\n[move_face] service OK — pose updates resuming')
+            print('\n[move_face] service OK — pose updates resuming')
         else:
             print(f'\n[move_face] WARNING: {SERVICE} returned False (timeout or service unreachable)')
         _last_result = result

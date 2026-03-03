@@ -7,15 +7,12 @@ Run with:  pytest tests/sim/ -v
 """
 
 import json
-import math
 import random
-from pathlib import Path
 
 import pytest
 
 from sim.scenario_generator.scenario import (
     FaceConfig,
-    DistractorConfig,
     ScenarioConfig,
     ScenarioGenerator,
 )
@@ -178,8 +175,7 @@ class TestLabels:
         """Hat takes priority over glasses when target has both, others have neither."""
         target = _make_face_config("face_both")
         other = _make_face_config("face_plain")
-        faces = [other, target]
-        target_idx = 1
+        faces = [other, target]  # noqa: F841 — list required for full API but target_idx used
         face_attrs = {
             "face_both":  _make_face_desc("face_both",  hat="fedora", glasses="reading"),
             "face_plain": _make_face_desc("face_plain", hat=None,     glasses=None),

@@ -198,11 +198,12 @@ Full training run with AMP (use best `lr`/`layers`/`bs` from sweep):
 ```bash
 python3 train/train.py \
     --dataset_dir sim/dataset/ \
-    --output_dir  runs/v0.1/ \
+    --output_dir  runs/v0.1.0/ \
     --epochs 20 \
     --batch_size 64 \
+    --num_workers 12 \
     --amp \
-    --experiment ocelot-v0.1
+    --experiment ocelot-v0.1.0
 ```
 
 Inspect metrics:

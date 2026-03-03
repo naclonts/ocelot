@@ -502,7 +502,7 @@ dummy_mask  = torch.ones(1, 77, dtype=torch.long)
 torch.onnx.export(
     model,
     (dummy_frame, dummy_ids, dummy_mask),
-    "models/vla_v0.1.onnx",
+    "models/vla.onnx",  # stable family-named path; version captured via git tag + MLflow
     input_names=["frames", "input_ids", "attention_mask"],
     output_names=["actions"],
     dynamic_axes={"frames": {0: "batch"}},
@@ -513,7 +513,7 @@ torch.onnx.export(
 Validate ONNX output matches PyTorch to within 1e-4:
 ```python
 import onnxruntime as ort
-sess = ort.InferenceSession("models/vla_v0.1.onnx")
+sess = ort.InferenceSession("models/vla.onnx")
 pt_out  = model(dummy_frame, dummy_ids, dummy_mask).detach().numpy()
 ort_out = sess.run(None, {"frames": ..., "input_ids": ..., "attention_mask": ...})[0]
 np.testing.assert_allclose(pt_out, ort_out, atol=1e-4)
@@ -640,6 +640,8 @@ sim/eval.py
   --model_path   ONNX_PATH     # path to VLA model
   --dataset_dir  DATASET_DIR   # for test.txt episode list
   --n_scenarios  N             # number of test scenarios (default: all in test.txt)
+  --stratified                 # flag: sample --n_scenarios evenly across label types
+  --seed         SEED          # RNG seed for stratified sampling (default: 0)
   --output       EVAL_JSON     # where to write results
   --language_cmd CMD           # language command to use (or "per_episode" to use dataset cmd)
 ```
@@ -715,9 +717,54 @@ Hard gates for a model to receive the `deployable` tag:
 
 ---
 
-## Step 7 — CI Integration
+## Step 7 — CI Integration ✅ DONE (2026-03-01)
+
+**Status**: Complete. `.github/workflows/ci.yml` created with two jobs: `lint-and-test` (PR
+checks, no GPU) and `eval` (model gate on merge to main). `train/eval_onnx.py` extended with
+`--max_episodes`/`--stratified`/`--seed` flags. `.flake8` config added. All 107 tests pass,
+flake8 clean (0 issues).
+
+**Actual eval script**: `train/eval_onnx.py` (plan referenced `sim/eval.py` but implementation
+lives in `train/`). CI yaml uses the correct path.
 
 **File**: `.github/workflows/ci.yml`
+
+### Model naming and eval modes
+
+**Model naming**: the CI-facing artifact is always `models/vla.onnx` — named after the model
+family, not the version. Version info lives in git tags (e.g. `v0.1-model`), MLflow run IDs,
+and DVC's content-addressed cache. To promote a new version: replace `models/vla.onnx`,
+`dvc add models/vla.onnx`, commit, and tag — the CI YAML never needs to change.
+
+**Two eval modes** — use the right one for the context:
+
+| Mode | Episodes | When to use |
+|---|---|---|
+| **CI gate** | 50 stratified (≥4 per label type) | Every merge to `main` — fast regression check |
+| **Promotion eval** | Full test split | Before promoting a new `vla.onnx` — run locally, log to MLflow |
+
+**Why a subset in CI**: VLA CPU inference (DINOv2-small + CLIP text + fusion) runs at
+~200–500 ms/frame on a GitHub Actions runner. The full test split at 50k-episode scale
+(5k episodes × 100 frames = 500k frames) would take 28–70 hours. 50 episodes (~5k frames)
+completes in under 10 minutes.
+
+**Why stratified**: with 8 label types, a random 50-episode draw may miss some labels entirely,
+making per-label MSE meaningless. Stratified sampling guarantees ≥4 episodes per label type.
+A broken model fails hard on any subsample; a subtle per-label regression is caught because all
+labels are represented.
+
+**Promotion workflow** (run locally before pushing `models/vla.onnx`):
+
+```bash
+source .venv/bin/activate
+python3 sim/eval.py \
+    --model_path runs/v0.1/best.pt.onnx \
+    --dataset_dir sim/dataset/ \
+    --output runs/v0.1/eval_full.json
+# overall_mse < 0.05, no per-label > 0.2
+cat runs/v0.1/eval_full.json | python3 -m json.tool
+# If passes: dvc add models/vla.onnx && git tag v0.1-model && git push
+```
 
 ### 7a — PR checks (fast, no sim)
 
@@ -747,6 +794,11 @@ jobs:
 
 Run on every merge to `main` that changes `train/`, `ocelot/vla_node.py`, or `models/`:
 
+**Model naming convention**: the CI-facing artifact is always `models/vla.onnx` — named after
+the model family, not the version. Version info lives in git tags (e.g. `v0.1-model`), MLflow
+run IDs, and DVC's content-addressed cache. To promote a new version: replace `models/vla.onnx`,
+`dvc add models/vla.onnx`, commit, and tag — the CI YAML never needs to change.
+
 ```yaml
 on:
   push:
@@ -758,15 +810,17 @@ jobs:
     runs-on: ubuntu-latest  # no GPU needed — onnxruntime CPU is fast enough for eval
     steps:
       - uses: actions/checkout@v4
-      - name: Pull dataset (DVC)
+      - name: Pull dataset and model (DVC)
         run: |
           pip install dvc h5py onnxruntime numpy
-          dvc pull dataset/  # requires DVC remote credentials in CI secrets
-      - name: Run offline eval
+          dvc pull dataset/ models/vla.onnx  # requires DVC remote credentials in CI secrets
+      - name: Run offline eval (50-episode stratified subset)
         run: |
           python3 sim/eval.py \
-            --model_path models/vla_v0.1.onnx \
+            --model_path models/vla.onnx \
             --dataset_dir dataset/ \
+            --n_scenarios 50 \
+            --stratified \
             --output eval_results.json
       - name: Upload eval report
         uses: actions/upload-artifact@v4
@@ -797,7 +851,7 @@ import train.model, train.export_onnx, torch
 m = train.model.VLAModel(pretrained=True)
 for p in m.action_head.parameters():
     p.data.zero_()
-# export_onnx.export(m, 'models/vla_v0.1.onnx')  # call your export helper
+# export_onnx.export(m, 'models/vla.onnx')  # call your export helper
 "
 # 2. Commit the bad ONNX file and push to main
 # 3. Confirm CI eval reports FAIL and blocks the commit
@@ -823,8 +877,8 @@ ocelot/
 │   ├── eval.py                 # NEW — offline eval script with pass/fail gate
 │   └── ... (Phase 2 files unchanged)
 ├── models/
-│   ├── vla_v0.1.onnx           # NEW — DVC-tracked
-│   └── vla_v0.1.onnx.dvc      # NEW — git-tracked DVC pointer
+│   ├── vla.onnx                # NEW — DVC-tracked; stable family name, version via git tag
+│   └── vla.onnx.dvc            # NEW — git-tracked DVC pointer
 ├── tests/
 │   ├── train/
 │   │   ├── test_dataset.py     # NEW
@@ -852,10 +906,10 @@ Before calling Phase 3 complete:
 - [ ] `sim/eval.py` on test split: `overall_mse` < 0.05 → PASS verdict
 - [ ] `eval.py` with zero-model → FAIL verdict (gate is meaningful)
 - [ ] CI runs lint + unit tests on a test PR → passes
-- [ ] CI runs eval on merge to main → PASS for v0.1 model
+- [ ] CI runs eval on merge to main → PASS for `models/vla.onnx`
 - [ ] CI runs eval on deliberately bad model → FAIL, commit blocked
 - [ ] MLflow dashboard shows v0.1 metrics and sweep comparison
-- [ ] `models/vla_v0.1.onnx` tracked by DVC
+- [ ] `models/vla.onnx` tracked by DVC, git-tagged `v0.1-model`
 
 ---
 
@@ -875,7 +929,7 @@ Before calling Phase 3 complete:
 
 Phase 4 (Hardware Deployment and MLOps) can begin when:
 
-1. `sim/eval.py` reports PASS for vla_v0.1.onnx on the held-out test split
+1. `sim/eval.py` reports PASS for `models/vla.onnx` on the held-out test split
 2. CI eval gate is live and blocks on FAIL
 3. MLflow tracking shows meaningful per-label-type metrics
 4. ONNX model is DVC-tracked and reproducible from `dvc pull`

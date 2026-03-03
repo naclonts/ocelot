@@ -17,8 +17,6 @@ import torch
 import torch.nn as nn
 
 from train.eval_onnx import (
-    MSE_THRESHOLD,
-    PER_LABEL_LIMIT,
     _build_tokenize_fn,
     _preprocess,
     run_eval,

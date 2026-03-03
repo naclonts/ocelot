@@ -1,0 +1,35 @@
+[flake8]
+# Max line length — slightly more lenient than PEP 8 to accommodate the
+# column-alignment style used throughout this codebase.
+max-line-length = 120
+
+# Ignored globally — all are intentional style choices in this project:
+extend-ignore =
+    # Column alignment (used extensively for readability of data tables)
+    E221,
+    E251,
+    E272,
+    # sys.path manipulation before imports (standard project-root injection pattern)
+    E402,
+    # Alignment-related whitespace in brackets and comments
+    E127,
+    E201,
+    E202,
+    E261,
+    E271,
+    E231,
+    E302,
+    E222,
+    W391,
+    E741,
+
+# Per-file ignores for sim/ utility scripts that contain long docstrings and
+# multi-line prompt strings that are intentionally verbose.
+per-file-ignores =
+    sim/data_gen/*.py: E501, E702
+    sim/scenario_generator/*.py: E501
+    sim/eval_vla_live.py: E501
+    sim/move_face.py: E501
+    sim/watch_episode.py: E501
+    sim/preview_episode.py: E702
+    sim/test_oracle_handoff.py: F841

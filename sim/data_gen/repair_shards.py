@@ -96,7 +96,7 @@ def repair_shard(shard_dir: Path, dry_run: bool) -> None:
         label_counts[label_key] = label_counts.get(label_key, 0) + 1
 
     if not episode_ids:
-        print(f"  WARNING: no readable H5 files — skipping")
+        print("  WARNING: no readable H5 files — skipping")
         return
 
     if need_meta:

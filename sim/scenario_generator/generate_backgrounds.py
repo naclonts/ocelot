@@ -72,7 +72,6 @@ def main():
     manifest_path = Path(__file__).resolve().parent / "backgrounds_manifest.json"
     if manifest_path.exists():
         existing = json.loads(manifest_path.read_text())
-        existing_ids = {e["id"] for e in existing}
         # Keep existing entries that are not plain colors (photos),
         # then append/replace the programmatically generated plain ones.
         photo_entries = [e for e in existing if e["id"] not in {p["id"] for p, _ in [(x, None) for x in plain_entries]}]

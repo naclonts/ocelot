@@ -170,7 +170,6 @@ _CROP_LEVEL = [
 
 def _weighted_choice(rng: random.Random, pool):
     """Pick one item from a weighted pool list of (key, display, weight)."""
-    keys    = [p[0] for p in pool]
     weights = [p[2] for p in pool]
     return rng.choices(pool, weights=weights, k=1)[0]
 

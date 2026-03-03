@@ -6,7 +6,6 @@ real dataset so this suite runs without a GPU, ROS, or Gazebo.
 
 from __future__ import annotations
 
-import struct
 from pathlib import Path
 
 import h5py

@@ -232,8 +232,12 @@ def print_report(results: dict) -> None:
     print(f"  {'Pearson r':30}  {pan_r:>8.3f}  {tilt_r:>8.3f}")
     print(f"  {'Sign agreement (%)':30}  {pan_sign:>8.1f}  {tilt_sign:>8.1f}")
     print(f"  {'Quiet @ zero (%)':30}  {pan_quiet:>8.1f}  {tilt_quiet:>8.1f}")
-    print(f"  {'Pred range':30}  [{pan_pred.min():.3f}, {pan_pred.max():.3f}]  [{tilt_pred.min():.3f}, {tilt_pred.max():.3f}]")
-    print(f"  {'GT range':30}  [{pan_tgt.min():.3f}, {pan_tgt.max():.3f}]  [{tilt_tgt.min():.3f}, {tilt_tgt.max():.3f}]")
+    print(f"  {'Pred range':30}  "
+          f"[{pan_pred.min():.3f}, {pan_pred.max():.3f}]  "
+          f"[{tilt_pred.min():.3f}, {tilt_pred.max():.3f}]")
+    print(f"  {'GT range':30}  "
+          f"[{pan_tgt.min():.3f}, {pan_tgt.max():.3f}]  "
+          f"[{tilt_tgt.min():.3f}, {tilt_tgt.max():.3f}]")
 
     # Per-label breakdown
     label_set = sorted(set(keys))
@@ -244,8 +248,10 @@ def print_report(results: dict) -> None:
         print("-" * 60)
         for lk in label_set:
             mask = np.array([k == lk for k in keys])
-            p_p = pan_pred[mask];  p_t = pan_tgt[mask]
-            t_p = tilt_pred[mask]; t_t = tilt_tgt[mask]
+            p_p = pan_pred[mask]
+            p_t = pan_tgt[mask]
+            t_p = tilt_pred[mask]
+            t_t = tilt_tgt[mask]
             print(
                 f"  {lk:30}  "
                 f"{np.sqrt(np.mean((p_p-p_t)**2)):>8.4f}  "

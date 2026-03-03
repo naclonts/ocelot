@@ -20,7 +20,7 @@ for _mod in (
     sys.modules.setdefault(_mod, mock.MagicMock())
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from sim.data_gen.collect_data import PERTURB_DURATION, PerturbController
+from sim.data_gen.collect_data import PerturbController
 
 
 # ---------------------------------------------------------------------------
@@ -198,7 +198,6 @@ def test_face_absent_then_present_resumes():
         ctrl.step(i, pos, lambda *a: calls.append((i, a)))
     # Trigger frame 5: face absent → no set_pose, but offsets may still be set
     # Frames 6-9: face present, if window still active should fire
-    active = [i for i, _ in calls]
     # Window may not have started since trigger frame had no face — acceptable.
     # Key requirement: no crash.
 

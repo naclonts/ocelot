@@ -317,7 +317,7 @@ def main():
     if args.dry_run:
         print(f"Dry run — {len(SCENES)} AI scenes + {len(REAL_PHOTOS)} real photos")
         print(f"  model  : gpt-image-1.5 via Runware  ({_MODEL_ID})")
-        print(f"  size   : 1536×1024 JPEG  quality=high")
+        print("  size   : 1536×1024 JPEG  quality=high")
         print(f"  out    : {_BACKGROUNDS_DIR}")
         print()
         for scene_id, tags, prompt in SCENES:

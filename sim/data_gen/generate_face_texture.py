@@ -140,7 +140,6 @@ def main() -> None:
 
     # Quick self-check: can Haar cascade detect it at representative scale?
     try:
-        import glob
         import sys
         name = 'haarcascade_frontalface_default.xml'
         cascade_path = None

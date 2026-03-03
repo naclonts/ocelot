@@ -208,7 +208,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--lr",              type=float, default=3e-4)
     p.add_argument("--n_fusion_layers", type=int,   default=2)
     p.add_argument("--n_heads",         type=int,   default=6)
-    p.add_argument("--num_workers",     type=int,   default=4,
+    p.add_argument("--num_workers",     type=int,   default=8,
                    help="DataLoader worker processes (set 0 to debug in main process)")
     p.add_argument("--amp",             action="store_true",
                    help="Mixed-precision training (fp16); halves VRAM, ~2× faster")
