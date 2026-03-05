@@ -20,7 +20,9 @@ from pathlib import Path
 
 import numpy as np
 import rclpy
-from geometry_msgs.msg import Pose
+from geometry_msgs.msg import Pose, Twist
+from rcl_interfaces.msg import Parameter as RclParameter, ParameterType, ParameterValue
+from rcl_interfaces.srv import SetParameters
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
 from std_msgs.msg import String
@@ -50,6 +52,14 @@ EVAL_DT = 0.1              # step interval seconds (10 Hz — matches camera)
 WARMUP_S = 4.0             # seconds to run motion before measuring
 EVAL_S = 10.0              # seconds to measure
 
+# Camera home position — must match sim_launch.py VLA override
+HOME_PAN = 0.0
+HOME_TILT = -0.2
+RESET_KP = 3.0             # P-gain for driving joints toward home
+RESET_TOL = 0.02           # rad (~1.1°) — close enough to call it homed
+RESET_TIMEOUT = 5.0        # max seconds to spend homing
+RESET_DT = 0.05            # 20 Hz control loop during reset
+
 
 # ---------------------------------------------------------------------------
 # ROS2 node — latest-value face pose + joint state buffers
@@ -68,6 +78,10 @@ class EvalNode(Node):
         self._joints_received = threading.Event()
 
         self._cmd_pub = self.create_publisher(String, '/episode/cmd', 1)
+        self._vel_pub = self.create_publisher(Twist, '/cmd_vel', 10)
+        self._vla_param_client = self.create_client(
+            SetParameters, '/vla_node/set_parameters'
+        )
 
         self.create_subscription(Pose, "/model/face_0/pose", self._face_cb, 10)
         self.create_subscription(JointState, "/joint_states", self._joint_cb, 10)
@@ -123,6 +137,56 @@ class EvalNode(Node):
     def get_joint_angles(self) -> tuple[float, float]:
         with self._lock:
             return self._pan_angle, self._tilt_angle
+
+    # ── inter-scenario camera reset ───────────────────────────────────────
+
+    def _set_vla_enabled(self, enabled: bool, timeout: float = 5.0) -> None:
+        """Set the VLA node's ~enabled parameter via service call."""
+        if not self._vla_param_client.wait_for_service(timeout_sec=min(timeout, 2.0)):
+            print("  WARNING: /vla_node/set_parameters not available")
+            return
+        p = RclParameter()
+        p.name = "enabled"
+        p.value = ParameterValue(
+            type=ParameterType.PARAMETER_BOOL, bool_value=enabled
+        )
+        req = SetParameters.Request()
+        req.parameters = [p]
+        future = self._vla_param_client.call_async(req)
+        deadline = time.monotonic() + timeout
+        while not future.done():
+            if time.monotonic() > deadline:
+                print("  WARNING: set VLA enabled timed out")
+                return
+            time.sleep(0.01)
+
+    def reset_to_home(self) -> None:
+        """Disable VLA, drive joints to home position, re-enable VLA.
+
+        Uses a simple P-controller on joint velocity to drive pan/tilt back
+        to (HOME_PAN, HOME_TILT).  This prevents the camera from drifting
+        randomly between scenarios when the screen is blank.
+        """
+        self._set_vla_enabled(False)
+
+        t0 = time.monotonic()
+        while time.monotonic() - t0 < RESET_TIMEOUT:
+            pan, tilt = self.get_joint_angles()
+            pan_err = HOME_PAN - pan
+            tilt_err = HOME_TILT - tilt
+            if abs(pan_err) < RESET_TOL and abs(tilt_err) < RESET_TOL:
+                break
+            twist = Twist()
+            twist.angular.z = float(np.clip(RESET_KP * pan_err, -1.0, 1.0))
+            twist.angular.y = float(np.clip(RESET_KP * tilt_err, -1.0, 1.0))
+            self._vel_pub.publish(twist)
+            time.sleep(RESET_DT)
+
+        # Zero velocity — hold position until VLA takes over
+        self._vel_pub.publish(Twist())
+        time.sleep(0.1)
+
+        self._set_vla_enabled(True)
 
 
 # ---------------------------------------------------------------------------
@@ -273,6 +337,12 @@ def main() -> None:
         results.append(result)
         status = "PASS" if result["pass"] else "FAIL"
         print(f"  mean={result['mean']:.1f}°  max={result['max']:.1f}°  n={result['n']}  [{status}]")
+
+        # Reset camera to home between scenarios so the VLA doesn't drift
+        # randomly while the screen is blank during teardown/setup.
+        if i < args.n_scenarios - 1:
+            print("  Resetting camera to home …")
+            node.reset_to_home()
 
     # Summary table
     print("\n--- Summary ---")

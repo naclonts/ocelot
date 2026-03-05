@@ -19,7 +19,12 @@ Parameters
     Language command to use for every frame.  Must be one of the keys in the
     token cache (or the closest match is used).  Default: "track the face".
 ~max_vel : float
-    Clip the model output to ±max_vel rad/s.  Default: 1.0.
+    Clip the model output to ±max_vel rad/s.  Default: 0.3 (matches oracle
+    max_velocity used during training data collection).
+~max_accel : float
+    Maximum velocity change per frame in rad/s² (assumes 10 Hz camera).
+    Limits how quickly the commanded velocity can ramp up or down.
+    Default: 1.5 — takes 2 frames to reach 0.3 rad/s from standstill.
 ~enabled : bool
     Publish /cmd_vel only when True.  Default: True.  Set False to pause without
     stopping the node (e.g. ros2 param set /vla_node enabled false).
@@ -89,7 +94,8 @@ class VLANode(Node):
         self.declare_parameter("checkpoint",  "")
         self.declare_parameter("token_cache", "")
         self.declare_parameter("command",     "track the face")
-        self.declare_parameter("max_vel",     1.0)
+        self.declare_parameter("max_vel",     0.3)
+        self.declare_parameter("max_accel",   1.5)
         self.declare_parameter("enabled",     True)
 
         checkpoint_str = self.get_parameter("checkpoint").value
@@ -149,6 +155,8 @@ class VLANode(Node):
         self._bridge  = CvBridge()
         self._pub     = self.create_publisher(Twist, "/cmd_vel", 10)
         self._tick    = 0
+        self._prev_pan: float = 0.0
+        self._prev_tilt: float = 0.0
 
         self.create_subscription(Image, "/camera/image_raw", self._image_cb, 10)
         self.get_logger().info("VLA node ready — subscribed to /camera/image_raw")
@@ -157,6 +165,8 @@ class VLANode(Node):
 
     def _image_cb(self, msg: Image) -> None:
         if not self.get_parameter("enabled").value:
+            self._prev_pan = 0.0
+            self._prev_tilt = 0.0
             return
 
         try:
@@ -179,6 +189,16 @@ class VLANode(Node):
         max_vel = float(self.get_parameter("max_vel").value)
         pan_vel  = float(np.clip(actions[0, 0], -max_vel, max_vel))
         tilt_vel = float(np.clip(actions[0, 1], -max_vel, max_vel))
+
+        # Rate-limit: cap how fast velocity can change per frame.
+        # At 10 Hz camera, max_delta = max_accel / 10.
+        max_delta = float(self.get_parameter("max_accel").value) / 10.0
+        pan_vel  = float(np.clip(pan_vel,  self._prev_pan - max_delta,
+                                 self._prev_pan + max_delta))
+        tilt_vel = float(np.clip(tilt_vel, self._prev_tilt - max_delta,
+                                 self._prev_tilt + max_delta))
+        self._prev_pan = pan_vel
+        self._prev_tilt = tilt_vel
 
         twist = Twist()
         twist.angular.z = pan_vel
