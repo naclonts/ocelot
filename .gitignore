@@ -20,3 +20,4 @@ mlflow.db
 # DVC-tracked data (use dvc pull to fetch)
 sim/faces/*.png
 sim/scenario_generator/data/
+/runs
