@@ -4,10 +4,6 @@ on:
   pull_request:
   push:
     branches: [main]
-    paths:
-      - "train/**"
-      - "ocelot/vla_node.py"
-      - "models/**"
 
 jobs:
   # ---------------------------------------------------------------------------
