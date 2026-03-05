@@ -38,7 +38,7 @@ jobs:
 
       - name: Lint
         run: |
-          python -m flake8 train/ ocelot/ sim/ tests/ --max-line-length 100
+          python -m flake8 train/ ocelot/ sim/ tests/
 
       - name: Unit tests (no sim, no GPU)
         # tests/sim/ require the sim container — excluded here

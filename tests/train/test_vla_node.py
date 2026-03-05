@@ -302,8 +302,11 @@ class TestONNXInferencePath:
         frame_a = _preprocess(np.zeros((224, 224, 3), dtype=np.uint8))
         frame_b = _preprocess(np.full((224, 224, 3), 200, dtype=np.uint8))
 
-        out_a = sess.run(["actions"], {"frames": frame_a, "input_ids": ids, "attention_mask": mask})[0]
-        out_b = sess.run(["actions"], {"frames": frame_b, "input_ids": ids, "attention_mask": mask})[0]
+        inputs = {"frames": frame_a, "input_ids": ids,
+                  "attention_mask": mask}
+        out_a = sess.run(["actions"], inputs)[0]
+        inputs["frames"] = frame_b
+        out_b = sess.run(["actions"], inputs)[0]
 
         assert not np.allclose(out_a, out_b)
 
@@ -339,7 +342,9 @@ class TestONNXInferencePath:
         mask = np.ones((1, 77), dtype=np.int64)
         frame = _preprocess(np.zeros((224, 224, 3), dtype=np.uint8))
 
-        out_first  = sess.run(["actions"], {"frames": frame, "input_ids": ids, "attention_mask": mask})[0]
-        out_second = sess.run(["actions"], {"frames": frame, "input_ids": ids, "attention_mask": mask})[0]
+        inputs = {"frames": frame, "input_ids": ids,
+                  "attention_mask": mask}
+        out_first = sess.run(["actions"], inputs)[0]
+        out_second = sess.run(["actions"], inputs)[0]
 
         np.testing.assert_array_equal(out_first, out_second)

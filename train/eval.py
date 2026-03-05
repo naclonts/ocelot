@@ -218,9 +218,15 @@ def print_report(results: dict) -> None:
 
     # Near-zero quietness: when |target| < 0.05, is |pred| < 0.1?
     quiet_mask = np.abs(pan_tgt) < 0.05
-    pan_quiet  = (np.abs(pan_pred[quiet_mask]) < 0.10).mean() * 100 if quiet_mask.any() else float("nan")
+    if quiet_mask.any():
+        pan_quiet = (np.abs(pan_pred[quiet_mask]) < 0.10).mean() * 100
+    else:
+        pan_quiet = float("nan")
     quiet_mask = np.abs(tilt_tgt) < 0.05
-    tilt_quiet = (np.abs(tilt_pred[quiet_mask]) < 0.10).mean() * 100 if quiet_mask.any() else float("nan")
+    if quiet_mask.any():
+        tilt_quiet = (np.abs(tilt_pred[quiet_mask]) < 0.10).mean() * 100
+    else:
+        tilt_quiet = float("nan")
 
     print()
     print("=" * 60)
@@ -318,8 +324,11 @@ def episode_plot(episodes: list[dict], out_dir: Path) -> None:
         t = np.arange(len(ep["pred"]))
         for col, (axis_idx, name) in enumerate([(0, "pan_vel"), (1, "tilt_vel")]):
             ax = axes[row][col]
-            ax.plot(t, ep["target"][:, axis_idx], label="GT",   color="steelblue", linewidth=1)
-            ax.plot(t, ep["pred"][:,   axis_idx], label="Pred", color="orangered", linewidth=1, alpha=0.8)
+            ax.plot(t, ep["target"][:, axis_idx],
+                    label="GT", color="steelblue", linewidth=1)
+            ax.plot(t, ep["pred"][:, axis_idx],
+                    label="Pred", color="orangered",
+                    linewidth=1, alpha=0.8)
             ax.set_ylabel("rad/s")
             ax.set_xlabel("frame")
             ax.set_title(f"ep {ep['ep_id']}  {name}\n\"{ep['cmd'][:40]}\"")

@@ -147,7 +147,8 @@ class TestLabels:
         )
 
     def test_single_face_always_track(self):
-        """Single face always returns key='track' with a label drawn from LABEL_REGISTRY['track']."""
+        """Single face always returns key='track' with a label
+        drawn from LABEL_REGISTRY['track']."""
         from sim.scenario_generator.labels import LABEL_REGISTRY
         rng = random.Random(0)
         for motion, speed, y in [

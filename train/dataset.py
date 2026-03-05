@@ -142,8 +142,9 @@ class OcelotDataset(Dataset):
             tilt_vel  = float(f["tilt_vel"][frame_idx])
             cmd       = f["cmd"][()].decode("utf-8") if isinstance(f["cmd"][()], bytes) \
                         else str(f["cmd"][()])
-            label_key = f["label_key"][()].decode("utf-8") if isinstance(f["label_key"][()], bytes) \
-                        else str(f["label_key"][()])
+            raw_lk = f["label_key"][()]
+            label_key = raw_lk.decode("utf-8") if isinstance(raw_lk, bytes) \
+                        else str(raw_lk)
 
         # Normalise and convert to (3,224,224) float32 tensor
         frame_f32 = frame_hwc.astype(np.float32) / 255.0       # (H,W,3) in [0,1]

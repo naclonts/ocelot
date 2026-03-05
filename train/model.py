@@ -220,7 +220,7 @@ class VLAModel(nn.Module):
                 normed, txt_proj, txt_proj,
                 key_padding_mask=key_padding_mask,
             )                                                                    # (B, 257, 384)
-            fused = fused + attn_out                                            # residual, no post-norm
+            fused = fused + attn_out                            # residual
 
         # Attention pooling over the 256 patch tokens (exclude CLS at index 0).
         # pool_scores learns which patch directions signal face presence/location.

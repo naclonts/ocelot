@@ -1,7 +1,7 @@
 [flake8]
 # Max line length — slightly more lenient than PEP 8 to accommodate the
 # column-alignment style used throughout this codebase.
-max-line-length = 120
+max-line-length = 100
 
 # Ignored globally — all are intentional style choices in this project:
 extend-ignore =
