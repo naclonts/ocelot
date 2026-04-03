@@ -1,6 +1,6 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, ExecuteProcess
-from launch.conditions import IfCondition
+from launch.conditions import IfCondition, UnlessCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
@@ -24,6 +24,21 @@ def generate_launch_description():
             default_value='false',
             description='Run visualizer_node → /camera/image_annotated',
         ),
+        DeclareLaunchArgument(
+            'use_vla',
+            default_value='false',
+            description='Use VLA model instead of classical tracker.',
+        ),
+        DeclareLaunchArgument(
+            'vla_checkpoint',
+            default_value='/ws/src/ocelot/models/vla_int8.onnx',
+            description='Path to the ONNX model.',
+        ),
+        DeclareLaunchArgument(
+            'vla_command',
+            default_value='track the face',
+            description='Language command passed to the VLA node.',
+        ),
 
         Node(
             package='ocelot',
@@ -42,6 +57,19 @@ def generate_launch_description():
             executable='tracker_node',
             name='tracker_node',
             parameters=[params],
+            condition=UnlessCondition(LaunchConfiguration('use_vla')),
+        ),
+        Node(
+            package='ocelot',
+            executable='vla_node',
+            name='vla_node',
+            parameters=[{
+                'checkpoint':  LaunchConfiguration('vla_checkpoint'),
+                'token_cache': '/ws/src/ocelot/models/vla_tokens.json',
+                'command':     LaunchConfiguration('vla_command'),
+                'enabled':     True,
+            }],
+            condition=IfCondition(LaunchConfiguration('use_vla')),
         ),
         Node(
             package='web_video_server',

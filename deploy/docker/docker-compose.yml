@@ -74,6 +74,8 @@ services:
       - ROS_LOCALHOST_ONLY=1
       - RECORD=${RECORD:-false}
       - VISUALIZE=${VISUALIZE:-false}
+      - USE_VLA=${USE_VLA:-false}
+      - VLA_COMMAND=${VLA_COMMAND:-track the face}
       - OCELOT_ROOT=/ws/src/ocelot
     command: >
       bash -c "source /opt/ros/jazzy/setup.bash &&
@@ -84,9 +86,17 @@ services:
       fi &&
       colcon build --packages-select ocelot --symlink-install --event-handlers console_direct- &&
       source /ws/install/setup.bash &&
+      if [ ! -f /ws/src/ocelot/models/vla_int8.onnx ]; then
+        echo 'Quantizing ONNX model to INT8...' &&
+        python3 -c \"from onnxruntime.quantization import quantize_dynamic, QuantType; quantize_dynamic('/ws/src/ocelot/models/vla.onnx', '/ws/src/ocelot/models/vla_int8.onnx', weight_type=QuantType.QInt8)\" &&
+        echo 'Quantization done.';
+      fi &&
       exec ros2 launch ocelot tracker_launch.py
       record:=${RECORD:-false}
-      visualize:=${VISUALIZE:-false}"
+      visualize:=${VISUALIZE:-false}
+      use_vla:=${USE_VLA:-false}
+      vla_checkpoint:=/ws/src/ocelot/models/vla_int8.onnx
+      \"vla_command:=${VLA_COMMAND:-track the face}\""
     stdin_open: true
     tty: true
 

@@ -1,0 +1,5 @@
+outs:
+- md5: 38cc6e291c6da98ef4a2e1922611a7bb
+  size: 92285439
+  hash: md5
+  path: vla_int8.onnx

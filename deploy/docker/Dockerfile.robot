@@ -34,7 +34,9 @@ RUN pip3 install --break-system-packages --ignore-installed \
     adafruit-circuitpython-servokit \
     smbus2 \
     lgpio \
-    opencv-python-headless
+    opencv-python-headless \
+    onnxruntime \
+    onnx
 
 # Python 3.11 for capture_worker.py.
 # picamera2/libcamera bindings on the host (Pi OS Bookworm) are compiled for
