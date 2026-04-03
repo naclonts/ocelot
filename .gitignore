@@ -13,11 +13,14 @@ log/
 .env
 
 # Training artifacts (checkpoints, MLflow tracking)
-runs/
 mlruns/
 mlflow.db
 
 # DVC-tracked data (use dvc pull to fetch)
 sim/faces/*.png
 sim/scenario_generator/data/
-/runs
+
+# runs/ — each subdir is DVC-tracked separately; allow .dvc and .gitignore files
+/runs/*
+!/runs/*.dvc
+!/runs/.gitignore

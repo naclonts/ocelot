@@ -1,0 +1,6 @@
+outs:
+- md5: 2234a1dd1a95478ed94f865e95b40d7b.dir
+  size: 3477699176
+  nfiles: 11
+  hash: md5
+  path: sweep-v0.0.2-1500-ep
