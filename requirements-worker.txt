@@ -4,6 +4,7 @@
 # picamera2/libcamera — compiled for Pi OS Bookworm's Python 3.11 — work correctly.
 # picamera2 itself and libcamera are bind-mounted from the host at runtime.
 # This file covers their Python-level deps that aren't in the Docker image.
-numpy
+numpy<2
 Pillow
 jsonschema
+av

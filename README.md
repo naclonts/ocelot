@@ -19,22 +19,14 @@ Pan-tilt face tracking robot (Raspberry Pi 5), plus a simulated environment for 
 # 1. Build Docker image
 docker compose build
 
-# 2. Create the Python 3.11 venv and build the ROS package (once, or after setup.py changes)
-docker compose run --rm ocelot bash -i -c "
-  python3.11 -m venv --without-pip /ws/src/ocelot/.venv &&
-  /ws/src/ocelot/.venv/bin/python3.11 -c \"import urllib.request; exec(urllib.request.urlopen('https://bootstrap.pypa.io/get-pip.py').read())\" &&
-  /ws/src/ocelot/.venv/bin/pip install -r /ws/src/ocelot/requirements-worker.txt &&
-  cd /ws && colcon build --packages-select ocelot --symlink-install
-"
+# 2. Launch — venv setup and ROS package build happen automatically on first run
+docker compose up
 ```
 
 > **Why the venv?** `capture_worker.py` runs under the container's `python3.11` (deadsnakes)
 > so that picamera2/libcamera — compiled for Pi OS Bookworm's Python 3.11 — work correctly.
-> picamera2 itself is bind-mounted from the host; the venv provides its Python deps
-> (numpy, Pillow, jsonschema) that aren't in the Docker image.
->
-> **Why `--symlink-install`?** The camera node uses `__file__` to locate the `.venv`.
-> Without symlinks, that path resolves to the install dir instead of the source tree.
+> The venv is created automatically on first `docker compose up` and persists in the project
+> directory. See Troubleshooting if you need to force-recreate it.
 
 ### Launch
 
@@ -465,15 +457,17 @@ simplejpeg (required by picamera2's JPEG encoder) needs `libturbojpeg` from the 
 ### `ModuleNotFoundError: No module named 'v4l2'`
 picamera2 imports `v4l2` for sensor mode enumeration. The file lives at `/usr/lib/python3/dist-packages/v4l2.py` on the host and must be bind-mounted into the container. Check `deploy/docker/docker-compose.yml`.
 
-### `ensurepip` fails when creating the Python 3.11 venv
-deadsnakes Python 3.11 on Ubuntu 24.04 (Noble) does not bundle the pip wheel used by `ensurepip`. Always create the venv with `--without-pip` and bootstrap pip via `get-pip.py` as shown in the build step above.
-
-### Stale `.venv` from host Python
-If the `.venv` was created by the host's Pi OS Python 3.11 (outside the container), delete it and recreate inside the container:
+### Stale or incompatible `.venv`
+If the `.venv` was created outside the container (host Pi OS Python 3.11 has a different ABI from deadsnakes), or if numpy/simplejpeg compatibility breaks after a Pi OS update, delete and recreate it inside the container:
 ```bash
-rm -rf .venv
-# then re-run the venv + colcon build step from First time setup above
+docker compose run --rm ocelot bash -i -c "
+  rm -rf /ws/src/ocelot/.venv &&
+  python3.11 -m venv --without-pip /ws/src/ocelot/.venv &&
+  /ws/src/ocelot/.venv/bin/python3.11 -c 'import urllib.request; exec(urllib.request.urlopen(\"https://bootstrap.pypa.io/get-pip.py\").read())' &&
+  /ws/src/ocelot/.venv/bin/pip install -r /ws/src/ocelot/requirements-worker.txt
+"
 ```
+Then `docker compose up` as normal — the venv will be picked up on the next run.
 
 ### `pip dependency resolver` warning about `pyyaml` / `launch-ros`
 Harmless. pip can see ROS packages in the environment and warns about missing deps for them. The worker venv doesn't need them — ignore it.

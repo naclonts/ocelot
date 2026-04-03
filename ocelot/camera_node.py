@@ -28,8 +28,10 @@ def _worker_env() -> dict:
     The .venv (Python 3.11) has numpy with the correct .cpython-311 .so files.
     The bind-mounted /usr/lib/python3/dist-packages has picamera2, libcamera, prctl, etc.
     """
-    # Resolve symlinks so this works with colcon --symlink-install
-    repo_root = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    # OCELOT_ROOT is set in docker-compose.yml to the source directory (/ws/src/ocelot).
+    # Needed because colcon --symlink-install adds the build dir (not source) to sys.path,
+    # so __file__ resolves to /ws/build/... where .venv doesn't exist.
+    repo_root = os.environ.get('OCELOT_ROOT') or os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
     venv_site = os.path.join(repo_root, '.venv', 'lib', 'python3.11', 'site-packages')
     sys_pkgs = '/usr/lib/python3/dist-packages'
     paths = [p for p in [venv_site, sys_pkgs] if os.path.isdir(p)]

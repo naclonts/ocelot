@@ -74,8 +74,15 @@ services:
       - ROS_LOCALHOST_ONLY=1
       - RECORD=${RECORD:-false}
       - VISUALIZE=${VISUALIZE:-false}
+      - OCELOT_ROOT=/ws/src/ocelot
     command: >
       bash -c "source /opt/ros/jazzy/setup.bash &&
+      if [ ! -d /ws/src/ocelot/.venv ]; then
+        python3.11 -m venv --without-pip /ws/src/ocelot/.venv &&
+        /ws/src/ocelot/.venv/bin/python3.11 -c 'import urllib.request; exec(urllib.request.urlopen(\"https://bootstrap.pypa.io/get-pip.py\").read())' &&
+        /ws/src/ocelot/.venv/bin/pip install -r /ws/src/ocelot/requirements-worker.txt;
+      fi &&
+      colcon build --packages-select ocelot --symlink-install --event-handlers console_direct- &&
       source /ws/install/setup.bash &&
       exec ros2 launch ocelot tracker_launch.py
       record:=${RECORD:-false}
