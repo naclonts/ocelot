@@ -1,3 +1,0 @@
-# Ignore bag files but keep this directory tracked
-*
-!.gitignore
