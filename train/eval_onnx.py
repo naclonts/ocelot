@@ -280,6 +280,7 @@ def run_eval(
         ep_results.append({
             "ep_id":     ep_id,
             "label_key": label_key,
+            "cmd":       cmd,
             "mse":       mse,
             "n_frames":  T,
         })
@@ -301,6 +302,14 @@ def run_eval(
         m = np.array([r["mse"]      for r in subset])
         per_label_mse[lk] = float(np.average(m, weights=w))
 
+    cmds = sorted({r["cmd"] for r in ep_results})
+    per_cmd_mse: dict[str, float] = {}
+    for c in cmds:
+        subset = [r for r in ep_results if r["cmd"] == c]
+        w = np.array([r["n_frames"] for r in subset])
+        m = np.array([r["mse"]      for r in subset])
+        per_cmd_mse[c] = float(np.average(m, weights=w))
+
     passed = (
         overall_mse < mse_threshold
         and all(v < per_label_limit for v in per_label_mse.values())
@@ -313,6 +322,7 @@ def run_eval(
         "n_episodes":      len(ep_results),
         "overall_mse":     overall_mse,
         "per_label_mse":   per_label_mse,
+        "per_cmd_mse":     per_cmd_mse,
         "mse_threshold":   mse_threshold,
         "per_label_limit": per_label_limit,
         "pass":            passed,
@@ -382,6 +392,10 @@ def main() -> None:
         for lk, mse in sorted(report["per_label_mse"].items()):
             flag = "  !" if mse >= report["per_label_limit"] else "   "
             print(f"    {flag} {lk:30s}: {mse:.5f}")
+    if report.get("per_cmd_mse"):
+        print("  Per-command MSE:")
+        for cmd, mse in sorted(report["per_cmd_mse"].items(), key=lambda x: x[1]):
+            print(f"       {cmd:45s}: {mse:.5f}")
     print(f"  Verdict: {verdict}")
     print(f"{'='*52}\n")
 

@@ -252,8 +252,8 @@ class TestRunEval:
 
         required = {
             "model_path", "dataset_dir", "split", "n_episodes",
-            "overall_mse", "per_label_mse", "mse_threshold",
-            "per_label_limit", "pass",
+            "overall_mse", "per_label_mse", "per_cmd_mse",
+            "mse_threshold", "per_label_limit", "pass",
         }
         assert required <= set(report.keys())
 
@@ -271,6 +271,21 @@ class TestRunEval:
         )
 
         assert set(report["per_label_mse"].keys()) == {"basic_track", "slow_follow"}
+
+    def test_per_cmd_mse_keys(self, tmp_path):
+        """per_cmd_mse has one entry per unique command string in the split."""
+        onnx   = _export_onnx(tmp_path)
+        ds_dir = _make_dataset(tmp_path / "d4b", pan_val=0.0)
+        cache  = _make_token_cache(tmp_path)
+
+        report = run_eval(
+            model_path=onnx,
+            dataset_dir=ds_dir,
+            split="test",
+            token_cache_path=cache,
+        )
+
+        assert set(report["per_cmd_mse"].keys()) == {"track the face", "follow slowly"}
 
     def test_n_episodes(self, tmp_path):
         onnx   = _export_onnx(tmp_path)
