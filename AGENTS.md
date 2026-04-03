@@ -1,0 +1,1 @@
+Check ./README.md for a project overview. More context is available in ./docs/.
