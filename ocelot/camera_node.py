@@ -7,6 +7,7 @@ while ROS Jazzy uses Python 3.12.
 """
 
 import os
+import socket
 import struct
 import subprocess
 import sys
@@ -72,6 +73,16 @@ class CameraNode(Node):
         self.get_logger().info(
             f'Camera node started ({self._width}x{self._height} @ {fps} fps, '
             f'worker interpreter: {interpreter})'
+        )
+        try:
+            ip = socket.gethostbyname(socket.gethostname())
+        except OSError:
+            ip = '<pi-ip>'
+        self.get_logger().info(
+            f'\n'
+            f'  ============================================================\n'
+            f'  Stream: http://{ip}:8080/stream?topic=/camera/image_annotated\n'
+            f'  ============================================================'
         )
 
     def _read_frames(self):
