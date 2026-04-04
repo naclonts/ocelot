@@ -112,6 +112,7 @@ def train_one_epoch(
     criterion: nn.Module,
     device: torch.device,
     scaler: "torch.cuda.amp.GradScaler | None",
+    scheduler: "torch.optim.lr_scheduler.LRScheduler | None" = None,
     grad_clip: float = 1.0,
 ) -> float:
     """Run one training epoch. Returns mean batch loss."""
@@ -142,6 +143,9 @@ def train_one_epoch(
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
             optimizer.step()
+
+        if scheduler is not None:
+            scheduler.step()
 
         total_loss += loss.item()
         n_batches += 1
@@ -209,6 +213,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--epochs",          type=int,   default=10)
     p.add_argument("--batch_size",      type=int,   default=64)
     p.add_argument("--lr",              type=float, default=3e-4)
+    p.add_argument("--warmup_steps",    type=int,   default=500,
+                   help="Linear LR warmup steps (0 to disable)")
     p.add_argument("--n_fusion_layers", type=int,   default=2)
     p.add_argument("--n_heads",         type=int,   default=6)
     p.add_argument("--num_workers",     type=int,   default=8,
@@ -279,9 +285,21 @@ def main() -> None:
         [p for p in model.parameters() if p.requires_grad],
         lr=args.lr,
     )
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer, T_max=args.epochs
+    steps_per_epoch = len(train_loader)
+    total_steps = steps_per_epoch * args.epochs
+    cosine = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=total_steps - args.warmup_steps,
     )
+    if args.warmup_steps > 0:
+        warmup = torch.optim.lr_scheduler.LinearLR(
+            optimizer, start_factor=1e-6 / args.lr, total_iters=args.warmup_steps,
+        )
+        scheduler = torch.optim.lr_scheduler.SequentialLR(
+            optimizer, schedulers=[warmup, cosine], milestones=[args.warmup_steps],
+        )
+    else:
+        scheduler = cosine
+    log.info("Steps/epoch: %d, total: %d, warmup: %d", steps_per_epoch, total_steps, args.warmup_steps)
     scaler = torch.amp.GradScaler("cuda") if args.amp else None
     if args.amp:
         log.info("AMP enabled (GradScaler)")
@@ -305,6 +323,7 @@ def main() -> None:
             "shards":          str(args.shards) if args.shards else "all",
             "label_keys":      str(args.label_keys) if args.label_keys else "all",
             "n_trainable":     n_trainable,
+            "warmup_steps":    args.warmup_steps,
         })
 
         best_val_loss = float("inf")
@@ -314,12 +333,12 @@ def main() -> None:
             log.info("── Epoch %d/%d ──", epoch + 1, args.epochs)
 
             train_loss = train_one_epoch(
-                model, train_loader, optimizer, criterion, device, scaler
+                model, train_loader, optimizer, criterion, device, scaler,
+                scheduler=scheduler,
             )
             val_loss, per_label_mse = evaluate(
                 model, val_loader, criterion, device
             )
-            scheduler.step()
 
             current_lr = scheduler.get_last_lr()[0]
             metrics: dict[str, float] = {
