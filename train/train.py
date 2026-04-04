@@ -69,12 +69,13 @@ def build_loaders(
     tokenizer,
     max_episodes: int | None = None,
     shards: list[int] | None = None,
+    label_keys: list[str] | None = None,
 ) -> tuple[DataLoader, DataLoader]:
     """Build train and val DataLoaders backed by OcelotDataset."""
     collate = lambda b: OcelotDataset.collate_fn(b, tokenizer)  # noqa: E731
 
-    train_ds = OcelotDataset("train", dataset_dir, max_episodes=max_episodes, shards=shards)
-    val_ds   = OcelotDataset("val",   dataset_dir, max_episodes=max_episodes, shards=shards)
+    train_ds = OcelotDataset("train", dataset_dir, max_episodes=max_episodes, shards=shards, label_keys=label_keys)
+    val_ds   = OcelotDataset("val",   dataset_dir, max_episodes=max_episodes, shards=shards, label_keys=label_keys)
 
     train_loader = DataLoader(
         train_ds,
@@ -216,6 +217,8 @@ def parse_args() -> argparse.Namespace:
                    help="Cap total episodes per split (train and val); useful for fast sweep runs")
     p.add_argument("--shards",          type=int,   nargs="+", default=None, metavar="N",
                    help="Only train on these shard numbers (e.g. --shards 26 27 28 29 30 31)")
+    p.add_argument("--label_keys",     type=str,   nargs="+", default=None, metavar="KEY",
+                   help="Only train on episodes with these label_key values (e.g. --label_keys track)")
     p.add_argument("--experiment",      type=str,   default="ocelot",
                    help="MLflow experiment name")
     return p.parse_args()
@@ -241,10 +244,13 @@ def main() -> None:
     log.info("Building DataLoaders from %s …", args.dataset_dir)
     if args.shards is not None:
         log.info("Shards: %s", args.shards)
+    if args.label_keys is not None:
+        log.info("Label keys: %s", args.label_keys)
     train_loader, val_loader = build_loaders(
         args.dataset_dir, args.batch_size, args.num_workers, tokenizer,
         max_episodes=args.max_episodes,
         shards=args.shards,
+        label_keys=args.label_keys,
     )
     train_ds = train_loader.dataset
     val_ds   = val_loader.dataset
@@ -295,6 +301,7 @@ def main() -> None:
             "dataset_dir":     str(args.dataset_dir),
             "max_episodes":    args.max_episodes,
             "shards":          str(args.shards) if args.shards else "all",
+            "label_keys":      str(args.label_keys) if args.label_keys else "all",
             "n_trainable":     n_trainable,
         })
 

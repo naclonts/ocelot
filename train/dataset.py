@@ -63,6 +63,7 @@ class OcelotDataset(Dataset):
         transform=None,
         max_episodes: int | None = None,
         shards: list[int] | None = None,
+        label_keys: list[str] | None = None,
     ) -> None:
         if split not in ("train", "val", "test"):
             raise ValueError(f"split must be train/val/test, got {split!r}")
@@ -100,6 +101,19 @@ class OcelotDataset(Dataset):
 
         if max_episodes is not None:
             all_episodes = all_episodes[:max_episodes]
+
+        # Filter by label_key if requested (reads only the scalar, no frame data)
+        if label_keys is not None:
+            allowed = set(label_keys)
+            filtered: list[tuple[Path, str]] = []
+            for episodes_dir, ep_id in all_episodes:
+                h5_path = episodes_dir / f"ep_{ep_id}.h5"
+                with h5py.File(h5_path, "r") as f:
+                    raw_lk = f["label_key"][()]
+                    lk = raw_lk.decode("utf-8") if isinstance(raw_lk, bytes) else str(raw_lk)
+                if lk in allowed:
+                    filtered.append((episodes_dir, ep_id))
+            all_episodes = filtered
 
         self.n_episodes = len(all_episodes)
 

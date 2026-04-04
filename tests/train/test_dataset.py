@@ -213,3 +213,48 @@ class TestOcelotDataset:
 
         ds = OcelotDataset("train", dataset_dir)
         assert len(ds) == 2 * N_FRAMES
+
+
+class TestLabelKeysFilter:
+
+    def test_filter_single_key(self, tmp_path):
+        """label_keys=['basic_track'] keeps only episode 0 (train split)."""
+        ds = OcelotDataset("train", _make_fixture(tmp_path), label_keys=["basic_track"])
+        assert ds.n_episodes == 1
+        assert len(ds) == 1 * N_FRAMES
+        assert ds[0]["label_key"] == "basic_track"
+
+    def test_filter_multiple_keys(self, tmp_path):
+        """label_keys with two values keeps both matching episodes."""
+        ds = OcelotDataset("train", _make_fixture(tmp_path),
+                           label_keys=["basic_track", "slow_follow"])
+        assert ds.n_episodes == 2
+        assert len(ds) == 2 * N_FRAMES
+
+    def test_filter_no_match(self, tmp_path):
+        """label_keys with no matching episodes yields empty dataset."""
+        ds = OcelotDataset("train", _make_fixture(tmp_path), label_keys=["nonexistent"])
+        assert ds.n_episodes == 0
+        assert len(ds) == 0
+
+    def test_filter_none_returns_all(self, tmp_path):
+        """label_keys=None (default) returns all episodes."""
+        fixture = _make_fixture(tmp_path)
+        ds_all    = OcelotDataset("train", fixture)
+        ds_none   = OcelotDataset("train", fixture, label_keys=None)
+        assert len(ds_all) == len(ds_none)
+
+    def test_filter_applies_to_val_split(self, tmp_path):
+        """Filter works on val split too (episode 2 = fast_follow)."""
+        fixture = _make_fixture(tmp_path)
+        ds = OcelotDataset("val", fixture, label_keys=["fast_follow"])
+        assert ds.n_episodes == 1
+        assert len(ds) == 1 * N_FRAMES
+
+    def test_filter_combined_with_max_episodes(self, tmp_path):
+        """max_episodes truncates before label_keys filters."""
+        # max_episodes=1 keeps episode 0 (basic_track), then filter to slow_follow → 0
+        ds = OcelotDataset("train", _make_fixture(tmp_path),
+                           max_episodes=1, label_keys=["slow_follow"])
+        assert ds.n_episodes == 0
+        assert len(ds) == 0

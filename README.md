@@ -204,6 +204,23 @@ python3 train/train.py \
     --experiment ocelot-v0.1.0
 ```
 
+##### Track-only train
+
+Train on single-face tracking episodes only (`label_key=track`), filtering out
+multi-face/attribute commands. Useful when the deployment only needs face tracking:
+
+```bash
+python3 train/train.py \
+    --dataset_dir sim/dataset/ \
+    --output_dir  runs/v0.2-track-only/ \
+    --epochs 20 \
+    --batch_size 64 \
+    --num_workers 12 \
+    --amp \
+    --label_keys track \
+    --experiment ocelot-v0.2-track-only
+```
+
 Inspect metrics:
 
 ```bash
