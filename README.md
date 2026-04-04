@@ -33,13 +33,31 @@ docker compose up
 ```bash
 docker compose up                          # classical tracker (Haar cascade)
 VISUALIZE=true docker compose up           # classical tracker + annotated stream
-USE_VLA=true docker compose up             # VLA model (INT8, ~6 Hz on Pi 5)
+USE_VLA=true docker compose up             # VLA model (INT8)
 USE_VLA=true VISUALIZE=true docker compose up
 USE_VLA=true VLA_COMMAND="look at the person" docker compose up
 ```
 
-On first `USE_VLA=true` run, the compose command auto-quantizes `models/vla.onnx` to INT8
-(`models/vla_int8.onnx`) before launch. This takes ~30 seconds and only happens once.
+`USE_VLA=true` loads `models/active.onnx` — a symlink to the currently active INT8 model.
+
+### Switching models
+
+To deploy a new trained model to the Pi, run `make use-model` from the project root. It
+quantizes `best.onnx` to INT8 (skipped if `best_int8.onnx` already exists), then updates
+the `models/active.onnx` symlink:
+
+```bash
+make use-model RUN=runs/v0.1.1-single-face
+docker compose up
+```
+
+Quantization runs inside the robot container (~30 s, once per checkpoint). Always deploy INT8 — FP32 models are too slow for real-time tracking on Pi 5 CPU.
+
+To override the model at launch time without changing the symlink:
+
+```bash
+USE_VLA=true VLA_CHECKPOINT=/ws/src/ocelot/runs/v0.1.1-single-face/best_int8.onnx docker compose up
+```
 
 Editing Python source files does **not** require a rebuild (symlinks are live). Rebuilding
 is only needed when `setup.py` entry points change.
@@ -427,7 +445,7 @@ camera_node ──/camera/image_raw──▶ vla_node ──/cmd_vel──▶ se
 
 **`tracker_node`** — Subscribes to `/camera/image_raw`, runs Haar cascade face detection, publishes velocity commands to `/cmd_vel` and bounding box to `/tracking/face_roi`. Key params: `kp_pan`, `kp_tilt`, `deadband`, `min_neighbors`, `min_face_size`. Disabled when `USE_VLA=true`.
 
-**`vla_node`** — Subscribes to `/camera/image_raw`, runs the trained ONNX model (DINOv2-small + CLIP text encoder + action head) at ~6 Hz on Pi 5 (INT8), publishes `/cmd_vel`. Enabled when `USE_VLA=true`. Key params: `checkpoint`, `token_cache`, `command`, `max_vel`, `max_accel`.
+**`vla_node`** — Subscribes to `/camera/image_raw`, runs the trained ONNX model (DINOv2-small + CLIP text encoder + action head), publishes `/cmd_vel`. Enabled when `USE_VLA=true`. Key params: `checkpoint`, `token_cache`, `command`, `max_vel`, `max_accel`.
 
 **`visualizer_node`** — Subscribes to `/camera/image_raw`, `/tracking/face_roi`, and `/cmd_vel`; publishes annotated frames to `/camera/image_annotated`. Optional — launch with `visualize:=true`.
 

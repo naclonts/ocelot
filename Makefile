@@ -18,7 +18,7 @@ endef
 
 VLA_ONNX ?= runs/sweep-v0.0.2-1500-ep/lr1e-4_l2/best.onnx
 
-.PHONY: sim-build sim sim-gui sim-gpu sim-vla sim-vla-eval sim-shell sim-xauth faces backgrounds dvc-push dvc-pull help
+.PHONY: sim-build sim sim-gui sim-gpu sim-vla sim-vla-eval sim-shell sim-xauth faces backgrounds dvc-push dvc-pull use-model help
 
 help:
 	@grep -E '^##' Makefile | sed 's/## //'
@@ -89,12 +89,22 @@ backgrounds:
 	dvc add sim/assets
 	dvc push
 
-## use-model  activate a model for robot deployment. Usage: make use-model RUN=runs/v0.1.1-single-face
+## use-model  quantize + activate a model for robot deployment. Usage: make use-model RUN=runs/v0.1.1-single-face
 RUN ?= runs/v0.1.1-single-face
 use-model:
-	ln -sf $(shell realpath --relative-to=models $(RUN)/best.onnx) models/active.onnx
+	@if [ ! -f $(RUN)/best_int8.onnx ]; then \
+	  echo "Quantizing $(RUN)/best.onnx → $(RUN)/best_int8.onnx ..."; \
+	  docker compose -f deploy/docker/docker-compose.yml run --rm --no-deps \
+	    --entrypoint "" ocelot \
+	    python3 -c "from onnxruntime.quantization import quantize_dynamic, QuantType; \
+	      quantize_dynamic('/ws/src/ocelot/$(RUN)/best.onnx', '/ws/src/ocelot/$(RUN)/best_int8.onnx', weight_type=QuantType.QInt8)"; \
+	  echo "Quantization done."; \
+	else \
+	  echo "$(RUN)/best_int8.onnx already exists, skipping quantization."; \
+	fi
+	ln -sf $(shell realpath --relative-to=models $(RUN)/best_int8.onnx) models/active.onnx
 	ln -sf $(shell realpath --relative-to=models $(RUN)/best_tokens.json) models/active_tokens.json
-	@echo "Active model → $(RUN)"
+	@echo "Active model → $(RUN)/best_int8.onnx"
 
 ## dvc-push   push all DVC-tracked data to S3
 dvc-push:
