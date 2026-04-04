@@ -1,0 +1,6 @@
+outs:
+- md5: f84391ca1afa739b4c0f512044bda55a.dir
+  size: 347021449
+  nfiles: 1
+  hash: md5
+  path: v0.1.1-single-face
