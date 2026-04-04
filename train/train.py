@@ -86,6 +86,7 @@ def build_loaders(
         pin_memory=True,
         drop_last=True,
         persistent_workers=num_workers > 0,
+        prefetch_factor=4 if num_workers > 0 else None,
     )
     val_loader = DataLoader(
         val_ds,
@@ -95,6 +96,7 @@ def build_loaders(
         collate_fn=collate,
         pin_memory=True,
         persistent_workers=num_workers > 0,
+        prefetch_factor=4 if num_workers > 0 else None,
     )
     return train_loader, val_loader
 
