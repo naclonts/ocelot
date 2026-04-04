@@ -215,6 +215,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--lr",              type=float, default=3e-4)
     p.add_argument("--warmup_steps",    type=int,   default=500,
                    help="Linear LR warmup steps (0 to disable)")
+    p.add_argument("--resume",          type=Path,  default=None, metavar="CKPT",
+                   help="Resume training from checkpoint (best.pt or last.pt)")
     p.add_argument("--n_fusion_layers", type=int,   default=2)
     p.add_argument("--n_heads",         type=int,   default=6)
     p.add_argument("--num_workers",     type=int,   default=8,
@@ -327,9 +329,23 @@ def main() -> None:
         })
 
         best_val_loss = float("inf")
+        start_epoch = 0
         best_ckpt = args.output_dir / "best.pt"
+        last_ckpt = args.output_dir / "last.pt"
 
-        for epoch in range(args.epochs):
+        if args.resume is not None:
+            ckpt = torch.load(args.resume, map_location=device, weights_only=False)
+            model.load_state_dict(ckpt["model"])
+            optimizer.load_state_dict(ckpt["optimizer"])
+            scheduler.load_state_dict(ckpt["scheduler"])
+            if scaler is not None and "scaler" in ckpt:
+                scaler.load_state_dict(ckpt["scaler"])
+            start_epoch = ckpt["epoch"] + 1
+            best_val_loss = ckpt.get("best_val_loss", float("inf"))
+            log.info("Resumed from %s (epoch %d, best_val_loss=%.5f)",
+                     args.resume, ckpt["epoch"], best_val_loss)
+
+        for epoch in range(start_epoch, args.epochs):
             log.info("── Epoch %d/%d ──", epoch + 1, args.epochs)
 
             train_loss = train_one_epoch(
@@ -356,10 +372,23 @@ def main() -> None:
             for k, v in per_label_mse.items():
                 log.info("  val_mse_%-22s %.5f", k, v)
 
+            ckpt_state = {
+                "epoch": epoch,
+                "model": model.state_dict(),
+                "optimizer": optimizer.state_dict(),
+                "scheduler": scheduler.state_dict(),
+                "best_val_loss": best_val_loss,
+            }
+            if scaler is not None:
+                ckpt_state["scaler"] = scaler.state_dict()
+
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
-                torch.save(model.state_dict(), best_ckpt)
+                ckpt_state["best_val_loss"] = best_val_loss
+                torch.save(ckpt_state, best_ckpt)
                 log.info("  → saved best checkpoint (val_loss=%.5f)", val_loss)
+
+            torch.save(ckpt_state, last_ckpt)
 
         # Log best checkpoint as MLflow artifact
         if best_ckpt.exists():
