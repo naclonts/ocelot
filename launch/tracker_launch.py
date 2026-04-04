@@ -31,8 +31,8 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'vla_checkpoint',
-            default_value='/ws/src/ocelot/models/vla_int8.onnx',
-            description='Path to the ONNX model.',
+            default_value='/ws/src/ocelot/models/active.onnx',
+            description='Path to the ONNX model (symlink → models/active.onnx by default).',
         ),
         DeclareLaunchArgument(
             'vla_command',
@@ -65,7 +65,7 @@ def generate_launch_description():
             name='vla_node',
             parameters=[{
                 'checkpoint':  LaunchConfiguration('vla_checkpoint'),
-                'token_cache': '/ws/src/ocelot/models/vla_tokens.json',
+                'token_cache': '/ws/src/ocelot/models/active_tokens.json',
                 'command':     LaunchConfiguration('vla_command'),
                 'enabled':     True,
             }],

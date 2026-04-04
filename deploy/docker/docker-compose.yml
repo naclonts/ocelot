@@ -76,6 +76,7 @@ services:
       - VISUALIZE=${VISUALIZE:-false}
       - USE_VLA=${USE_VLA:-false}
       - VLA_COMMAND=${VLA_COMMAND:-track the face}
+      - VLA_CHECKPOINT=${VLA_CHECKPOINT:-/ws/src/ocelot/models/active.onnx}
       - OCELOT_ROOT=/ws/src/ocelot
     command: >
       bash -c "source /opt/ros/jazzy/setup.bash &&
@@ -95,7 +96,7 @@ services:
       record:=${RECORD:-false}
       visualize:=${VISUALIZE:-false}
       use_vla:=${USE_VLA:-false}
-      vla_checkpoint:=/ws/src/ocelot/models/vla_int8.onnx
+      vla_checkpoint:=${VLA_CHECKPOINT:-/ws/src/ocelot/models/active.onnx}
       \"vla_command:=${VLA_COMMAND:-track the face}\""
     stdin_open: true
     tty: true

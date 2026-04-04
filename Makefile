@@ -89,6 +89,13 @@ backgrounds:
 	dvc add sim/assets
 	dvc push
 
+## use-model  activate a model for robot deployment. Usage: make use-model RUN=runs/v0.1.1-single-face
+RUN ?= runs/v0.1.1-single-face
+use-model:
+	ln -sf $(shell realpath --relative-to=models $(RUN)/best.onnx) models/active.onnx
+	ln -sf $(shell realpath --relative-to=models $(RUN)/best_tokens.json) models/active_tokens.json
+	@echo "Active model → $(RUN)"
+
 ## dvc-push   push all DVC-tracked data to S3
 dvc-push:
 	dvc push
