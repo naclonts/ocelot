@@ -116,7 +116,9 @@ class VLANode(Node):
         self._prev_pan: float = 0.0
         self._prev_tilt: float = 0.0
 
-        self.create_subscription(Image, "/camera/image_raw", self._image_cb, 10)
+        # Use queue depth of 1, as we only want to process the latest frame
+        # when hardware falls behind on processing
+        self.create_subscription(Image, "/camera/image_raw", self._image_cb, 1)
         self.get_logger().info("VLA node ready — subscribed to /camera/image_raw")
 
     # ── callbacks ──────────────────────────────────────────────────────────
