@@ -6,7 +6,7 @@ at module level so the import succeeds in the host .venv.
 
 Tests cover:
   - _preprocess: BGR HxWx3 → float32 (1,3,224,224) ImageNet-normalised
-  - _find_best_command: exact / substring / fallback matching
+  - build_tokenize_fn: cache hits and runtime tokenization for arbitrary commands
   - ONNX inference path: shape, dtype, and value-bound checks using a
     lightweight dummy model (no HuggingFace downloads needed)
 """
@@ -19,6 +19,7 @@ import unittest.mock as mock
 from pathlib import Path
 
 import numpy as np
+import pytest
 import torch
 import torch.nn as nn
 
@@ -37,8 +38,8 @@ for _mod in (
 ):
     sys.modules.setdefault(_mod, mock.MagicMock())
 
-from ocelot.vla_inference import VLAInferenceEngine  # noqa: E402
-from ocelot.vla_node import _find_best_command, _preprocess  # noqa: E402
+from ocelot.vla_inference import VLAInferenceEngine, build_tokenize_fn  # noqa: E402
+from ocelot.vla_node import _preprocess  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Shared ONNX helpers
@@ -181,49 +182,105 @@ class TestPreprocess:
 
 
 # ---------------------------------------------------------------------------
-# Tests: _find_best_command
+# Tests: build_tokenize_fn
 # ---------------------------------------------------------------------------
 
-class TestFindBestCommand:
+class TestBuildTokenizeFn:
 
-    CACHE = {
-        "track the face":    {},
-        "follow slowly":     {},
-        "look at the person": {},
-    }
+    def test_cache_hit_reuses_exported_arrays(self, tmp_path):
+        tokenize = build_tokenize_fn(_make_token_cache(tmp_path))
 
-    def test_exact_match(self):
-        assert _find_best_command("track the face", self.CACHE) == "track the face"
+        ids, mask = tokenize("track the face")
 
-    def test_exact_match_second_key(self):
-        assert _find_best_command("follow slowly", self.CACHE) == "follow slowly"
+        assert ids.shape == (1, 77)
+        assert mask.shape == (1, 77)
+        assert ids.dtype == np.int64
+        assert mask.dtype == np.int64
+        assert ids[0, 0] == 1
+        assert mask[0, 0] == 1
 
-    def test_key_substring_of_request(self):
-        """Cache key is a substring of the requested string."""
-        result = _find_best_command("please track the face now", self.CACHE)
-        assert result == "track the face"
+    def test_cache_hit_is_memoized(self, tmp_path):
+        tokenize = build_tokenize_fn(_make_token_cache(tmp_path))
 
-    def test_request_substring_of_key(self):
-        """Requested string is a substring of a cache key."""
-        result = _find_best_command("follow", self.CACHE)
-        assert result == "follow slowly"
+        first = tokenize("track the face")
+        second = tokenize("track the face")
 
-    def test_fallback_to_track_the_face(self):
-        """Unknown command falls back to 'track the face' when present."""
-        result = _find_best_command("completely unknown xyz", self.CACHE)
-        assert result == "track the face"
+        assert first is second
 
-    def test_fallback_to_first_key_when_no_standard_key(self):
-        """No standard fallbacks present → return first key."""
-        cache = {"custom_a": {}, "custom_b": {}}
-        result = _find_best_command("completely unknown xyz", cache)
-        assert result == "custom_a"
+    def test_uncached_command_tokenized_at_runtime(self, tmp_path, monkeypatch):
+        calls: list[str] = []
 
-    def test_look_at_fallback(self):
-        """'look at the person' is used as a fallback when track/follow absent."""
-        cache = {"look at the person": {}}
-        result = _find_best_command("unknown command", cache)
-        assert result == "look at the person"
+        class _Tokenizer:
+            def __call__(self, text, return_tensors, padding, truncation, max_length):
+                calls.append(text)
+                assert return_tensors == "np"
+                assert padding == "max_length"
+                assert truncation is True
+                assert max_length == 77
+                return {
+                    "input_ids": np.full((1, 77), 9, dtype=np.int64),
+                    "attention_mask": np.ones((1, 77), dtype=np.int64),
+                }
+
+        class _TokenizerClass:
+            @staticmethod
+            def from_pretrained(model_id):
+                calls.append(f"load:{model_id}")
+                return _Tokenizer()
+
+        transformers_mod = mock.MagicMock(CLIPTokenizerFast=_TokenizerClass)
+        monkeypatch.setitem(sys.modules, "transformers", transformers_mod)
+
+        tokenize = build_tokenize_fn(_make_token_cache(tmp_path))
+        ids, mask = tokenize("turn slightly left and keep the face centered")
+
+        assert ids.shape == (1, 77)
+        assert mask.shape == (1, 77)
+        assert calls[0].startswith("load:")
+        assert calls[1] == "turn slightly left and keep the face centered"
+
+    def test_uncached_command_is_memoized(self, tmp_path, monkeypatch):
+        calls = {"loads": 0, "tokenizes": 0}
+
+        class _Tokenizer:
+            def __call__(self, text, return_tensors, padding, truncation, max_length):
+                calls["tokenizes"] += 1
+                return {
+                    "input_ids": np.full((1, 77), 3, dtype=np.int64),
+                    "attention_mask": np.ones((1, 77), dtype=np.int64),
+                }
+
+        class _TokenizerClass:
+            @staticmethod
+            def from_pretrained(model_id):
+                calls["loads"] += 1
+                return _Tokenizer()
+
+        transformers_mod = mock.MagicMock(CLIPTokenizerFast=_TokenizerClass)
+        monkeypatch.setitem(sys.modules, "transformers", transformers_mod)
+
+        tokenize = build_tokenize_fn(_make_token_cache(tmp_path))
+        first = tokenize("new arbitrary command")
+        second = tokenize("new arbitrary command")
+
+        assert first is second
+        assert calls == {"loads": 1, "tokenizes": 1}
+
+    def test_uncached_command_without_transformers_raises(self, tmp_path, monkeypatch):
+        tokenize = build_tokenize_fn(_make_token_cache(tmp_path))
+
+        monkeypatch.delitem(sys.modules, "transformers", raising=False)
+        real_import = __import__
+
+        def _fake_import(name, *args, **kwargs):
+            if name == "transformers":
+                raise ImportError("missing transformers")
+            return real_import(name, *args, **kwargs)
+
+        monkeypatch.setattr("builtins.__import__", _fake_import)
+
+        with pytest.raises(RuntimeError, match="transformers is required"):
+            tokenize("arbitrary uncached command")
 
 
 # ---------------------------------------------------------------------------
@@ -350,8 +407,8 @@ class TestONNXInferencePath:
 
         np.testing.assert_array_equal(out_first, out_second)
 
-    def test_shared_engine_predicts(self, tmp_path):
-        """Shared inference engine returns pan/tilt and resolves fallback commands."""
+    def test_shared_engine_predicts_cached_command(self, tmp_path):
+        """Shared inference engine returns pan/tilt for cached commands."""
         model_path = _export_onnx(tmp_path, model=_InputSensitiveModel())
         token_cache = _make_token_cache(tmp_path)
         engine = VLAInferenceEngine(
@@ -362,10 +419,47 @@ class TestONNXInferencePath:
 
         result = engine.predict_bgr(
             np.full((224, 224, 3), 64, dtype=np.uint8),
-            "please track the face now",
+            "track the face",
         )
 
         assert result["command"] == "track the face"
         assert isinstance(result["pan_vel"], float)
         assert isinstance(result["tilt_vel"], float)
         assert result["inference_latency_ms"] >= 0.0
+
+    def test_shared_engine_predicts_arbitrary_command(self, tmp_path, monkeypatch):
+        """Shared inference engine tokenizes uncached commands at runtime."""
+        model_path = _export_onnx(tmp_path, model=_InputSensitiveModel())
+        token_cache = _make_token_cache(tmp_path)
+        engine = VLAInferenceEngine(
+            checkpoint=model_path,
+            token_cache=token_cache,
+            providers=["CPUExecutionProvider"],
+        )
+
+        calls = {"loads": 0, "tokenizes": 0}
+
+        class _Tokenizer:
+            def __call__(self, text, return_tensors, padding, truncation, max_length):
+                calls["tokenizes"] += 1
+                return {
+                    "input_ids": np.full((1, 77), 5, dtype=np.int64),
+                    "attention_mask": np.ones((1, 77), dtype=np.int64),
+                }
+
+        class _TokenizerClass:
+            @staticmethod
+            def from_pretrained(model_id):
+                calls["loads"] += 1
+                return _Tokenizer()
+
+        transformers_mod = mock.MagicMock(CLIPTokenizerFast=_TokenizerClass)
+        monkeypatch.setitem(sys.modules, "transformers", transformers_mod)
+
+        command = "turn slightly left and keep the face centered"
+        first = engine.predict_bgr(np.full((224, 224, 3), 64, dtype=np.uint8), command)
+        second = engine.predict_bgr(np.full((224, 224, 3), 64, dtype=np.uint8), command)
+
+        assert first["command"] == command
+        assert second["command"] == command
+        assert calls == {"loads": 1, "tokenizes": 1}

@@ -8,12 +8,15 @@ import json
 import os
 import time
 from pathlib import Path
+from typing import Callable
 
 import numpy as np
 
 # ImageNet normalisation — must match train/dataset.py
 _IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
 _IMAGENET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+_MAX_LEN = 77  # CLIP max token length — must match training/export.
+_CLIP_ID = "openai/clip-vit-base-patch32"
 
 
 def _preload_cuda_runtime_libs() -> None:
@@ -79,24 +82,59 @@ def preprocess_bgr(bgr: np.ndarray) -> np.ndarray:
     return np.ascontiguousarray(frame)
 
 
-def find_best_command(requested: str, cache: dict[str, dict]) -> str:
-    """Return the closest command in the cache (exact match first, then substring)."""
-    if requested in cache:
-        return requested
-    req_lower = requested.lower().strip()
-    for key in cache:
-        if req_lower in key.lower() or key.lower() in req_lower:
-            return key
-    for fallback in (
-        "track the face",
-        "look at the person",
-        "follow the person",
-        "keep the face centered",
-        "no face visible",
-    ):
-        if fallback in cache:
-            return fallback
-    return next(iter(cache))
+def build_tokenize_fn(
+    token_cache_path: str | Path | None,
+) -> Callable[[str], tuple[np.ndarray, np.ndarray]]:
+    """Return a cache-first CLIP tokenization function for runtime commands.
+
+    Cached commands reuse the arrays exported alongside the model. Uncached
+    commands are tokenized lazily with the same CLIP tokenizer used in
+    training/export and memoized for subsequent calls.
+    """
+    memo: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+
+    if token_cache_path is not None:
+        cache_path = Path(token_cache_path)
+        if cache_path.exists():
+            raw = json.loads(cache_path.read_text())
+            for cmd, entry in raw.items():
+                memo[cmd] = (
+                    np.array([entry["input_ids"]], dtype=np.int64),
+                    np.array([entry["attention_mask"]], dtype=np.int64),
+                )
+
+    tokenizer_holder: list[object | None] = [None]
+
+    def _get_tokenizer():
+        if tokenizer_holder[0] is None:
+            try:
+                from transformers import CLIPTokenizerFast
+            except ImportError as exc:
+                raise RuntimeError(
+                    "transformers is required to tokenize uncached commands at runtime."
+                ) from exc
+            tokenizer_holder[0] = CLIPTokenizerFast.from_pretrained(_CLIP_ID)
+        return tokenizer_holder[0]
+
+    def tokenize(command: str) -> tuple[np.ndarray, np.ndarray]:
+        arrays = memo.get(command)
+        if arrays is None:
+            tokenizer = _get_tokenizer()
+            encoded = tokenizer(
+                command,
+                return_tensors="np",
+                padding="max_length",
+                truncation=True,
+                max_length=_MAX_LEN,
+            )
+            arrays = (
+                encoded["input_ids"].astype(np.int64),
+                encoded["attention_mask"].astype(np.int64),
+            )
+            memo[command] = arrays
+        return arrays
+
+    return tokenize
 
 
 class VLAInferenceEngine:
@@ -119,36 +157,15 @@ class VLAInferenceEngine:
         else:
             self.token_cache_path = Path(token_cache)
 
-        if not self.token_cache_path.exists():
-            raise FileNotFoundError(
-                f"Token cache not found: {self.token_cache_path}"
-            )
-
         if providers is None:
             providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
 
         self.session = ort.InferenceSession(str(self.checkpoint), providers=providers)
         self.provider = self.session.get_providers()[0]
-        self.token_cache: dict[str, dict] = json.loads(self.token_cache_path.read_text())
-        self._token_arrays: dict[str, tuple[np.ndarray, np.ndarray]] = {}
-
-    def resolve_command(self, requested: str) -> str:
-        return find_best_command(requested, self.token_cache)
-
-    def _command_arrays(self, command: str) -> tuple[str, np.ndarray, np.ndarray]:
-        actual = self.resolve_command(command)
-        arrays = self._token_arrays.get(actual)
-        if arrays is None:
-            tokens = self.token_cache[actual]
-            arrays = (
-                np.array([tokens["input_ids"]], dtype=np.int64),
-                np.array([tokens["attention_mask"]], dtype=np.int64),
-            )
-            self._token_arrays[actual] = arrays
-        return actual, arrays[0], arrays[1]
+        self._tokenize = build_tokenize_fn(self.token_cache_path)
 
     def predict_bgr(self, bgr: np.ndarray, command: str) -> dict[str, float | str]:
-        actual, input_ids, attention_mask = self._command_arrays(command)
+        input_ids, attention_mask = self._tokenize(command)
         frame = preprocess_bgr(bgr)
 
         start = time.perf_counter()
@@ -163,7 +180,7 @@ class VLAInferenceEngine:
         latency_ms = (time.perf_counter() - start) * 1000.0
 
         return {
-            "command": actual,
+            "command": command,
             "pan_vel": float(actions[0, 0]),
             "tilt_vel": float(actions[0, 1]),
             "inference_latency_ms": latency_ms,

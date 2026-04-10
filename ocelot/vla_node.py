@@ -5,8 +5,8 @@ Subscribes to /camera/image_raw, runs ONNX inference per frame, publishes
 /cmd_vel (Twist) with (pan_vel → angular.z, tilt_vel → angular.y).
 
 This node replaces tracker_node and oracle_node when validating the trained
-model in simulation.  It requires no torch or transformers — only onnxruntime
-and numpy (both available in the sim container).
+model in simulation. It requires onnxruntime and numpy; arbitrary commands
+also require transformers so the CLIP tokenizer can run on cache misses.
 
 Parameters
 ----------
@@ -16,8 +16,9 @@ Parameters
     Path to the companion JSON token cache (<checkpoint-stem>_tokens.json).
     Defaults to <checkpoint directory>/<checkpoint stem>_tokens.json.
 ~command : str
-    Language command to use for every frame.  Must be one of the keys in the
-    token cache (or the closest match is used).  Default: "track the face".
+    Language command to use for every frame. Cached commands reuse exported
+    token arrays; arbitrary commands are tokenized at runtime with the same
+    CLIP tokenizer used in training/export. Default: "track the face".
 ~max_vel : float
     Clip the model output to ±max_vel rad/s.  Default: 0.3 (matches oracle
     max_velocity used during training data collection).
@@ -53,10 +54,9 @@ from sensor_msgs.msg import Image
 
 import numpy as np
 
-from ocelot.vla_inference import VLAInferenceEngine, find_best_command, preprocess_bgr
+from ocelot.vla_inference import VLAInferenceEngine, preprocess_bgr
 
 _preprocess = preprocess_bgr
-_find_best_command = find_best_command
 
 
 class VLANode(Node):
@@ -91,24 +91,13 @@ class VLANode(Node):
                 "onnxruntime not installed. Run: pip3 install onnxruntime"
             )
             raise RuntimeError("onnxruntime missing") from e
-        except FileNotFoundError as e:
-            self.get_logger().fatal(
-                f"{e}. Run train/export_onnx.py on the host first."
-            )
-            raise RuntimeError("token cache missing") from e
 
         self.get_logger().info(f"Loading ONNX model from {checkpoint_str} …")
         self.get_logger().info(
             f"ONNX session ready (provider: {self._engine.provider})"
         )
-        cmd_actual = self._engine.resolve_command(cmd_requested)
-        if cmd_actual != cmd_requested:
-            self.get_logger().warn(
-                f"Command {cmd_requested!r} not in token cache; "
-                f"using {cmd_actual!r} instead."
-            )
-        self.get_logger().info(f"Command: {cmd_actual!r}")
-        self._command = cmd_actual
+        self.get_logger().info(f"Command: {cmd_requested!r}")
+        self._command = cmd_requested
 
         self._bridge  = CvBridge()
         self._pub     = self.create_publisher(Twist, "/cmd_vel", 10)

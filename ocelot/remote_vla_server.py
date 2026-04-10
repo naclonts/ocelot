@@ -116,17 +116,16 @@ def main() -> None:
         checkpoint=args.checkpoint,
         token_cache=args.token_cache,
     )
-    actual_command = engine.resolve_command(args.command)
     handler = _build_handler(
         engine=engine,
-        default_command=actual_command,
+        default_command=args.command,
         max_vel=args.max_vel,
         deadband=args.deadband,
     )
     server = ThreadingHTTPServer((args.host, args.port), handler)
     print(
         f"Remote VLA server listening on http://{args.host}:{args.port} "
-        f"(provider={engine.provider}, command={actual_command!r})"
+        f"(provider={engine.provider}, command={args.command!r})"
     )
     try:
         server.serve_forever()

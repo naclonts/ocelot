@@ -35,6 +35,7 @@ RUN pip3 install --break-system-packages --ignore-installed \
     smbus2 \
     lgpio \
     opencv-python-headless \
+    transformers==5.2.0 \
     onnxruntime \
     onnx
 
