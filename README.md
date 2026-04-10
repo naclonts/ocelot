@@ -35,9 +35,56 @@ docker compose up                          # VLA model (INT8) — default
 VISUALIZE=true docker compose up           # VLA + annotated stream
 USE_HAAR=true docker compose up            # classical Haar cascade tracker
 VLA_COMMAND="look at the person" docker compose up
+USE_REMOTE_VLA=true REMOTE_VLA_URL=http://<workstation-ip>:8765/infer docker compose up
+ROS_LOCALHOST_ONLY=1 docker compose up    # optional: keep ROS graph private to the Pi
 ```
 
 `docker compose up` loads `models/active.onnx` — a symlink to the currently active INT8 model.
+By default the Pi now exposes its ROS 2 graph on the LAN (`ROS_LOCALHOST_ONLY=0`), so a laptop
+on the same network can inspect topics like `/camera/image_raw`. Set `ROS_LOCALHOST_ONLY=1` if
+you want to isolate the ROS graph to the Pi again.
+
+### Offboard inference and cross-machine ROS over wired LAN
+
+By default the Pi exposes its ROS 2 graph on the LAN (`ROS_LOCALHOST_ONLY=0`), so a laptop on
+the same network can inspect topics like `/camera/image_raw`. Set `ROS_LOCALHOST_ONLY=1` if you
+want to isolate the ROS graph to the Pi again.
+
+To inspect the Pi's ROS graph from your laptop:
+
+```bash
+# On the Pi
+docker compose up
+
+# On your laptop
+export ROS_DOMAIN_ID=0
+export ROS_LOCALHOST_ONLY=0
+ros2 topic list
+ros2 topic echo /cmd_vel
+```
+
+To run the camera + servo stack on the Pi and the ONNX model on your workstation:
+
+```bash
+# On your workstation
+export ROS_DOMAIN_ID=0
+export ROS_LOCALHOST_ONLY=0
+python -m ocelot.remote_vla_server \
+  --checkpoint models/active.onnx \
+  --token-cache models/active_tokens.json \
+  --host 0.0.0.0 \
+  --port 8765
+
+# On the Pi
+USE_REMOTE_VLA=true \
+REMOTE_VLA_URL=http://<workstation-ip>:8765/infer \
+docker compose up
+```
+
+The Pi keeps `camera_node` and `servo_node` local, JPEG-encodes each frame, posts it to the
+workstation, and applies the returned `(pan_vel, tilt_vel)` commands locally. `servo_node`
+zeros velocities if `/cmd_vel` goes stale for 250 ms, so a lost workstation or cable does not
+leave the head slewing on the last command.
 
 ### Switching models
 

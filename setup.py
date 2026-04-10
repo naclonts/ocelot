@@ -44,6 +44,8 @@ setup(
             'visualizer_node = ocelot.visualizer_node:main',
             'oracle_validator = ocelot.oracle_validator:main',
             'vla_node = ocelot.vla_node:main',
+            'remote_vla_client_node = ocelot.remote_vla_client_node:main',
+            'remote_vla_server = ocelot.remote_vla_server:main',
         ],
     },
 )

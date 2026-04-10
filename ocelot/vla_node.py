@@ -45,56 +45,18 @@ Or run directly:
 
 from __future__ import annotations
 
-import json
-import logging
-from pathlib import Path
-
-import numpy as np
 import rclpy
 from cv_bridge import CvBridge
 from geometry_msgs.msg import Twist
 from rclpy.node import Node
 from sensor_msgs.msg import Image
 
-# ImageNet normalisation — must match train/dataset.py
-_IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
-_IMAGENET_STD  = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+import numpy as np
 
-log = logging.getLogger(__name__)
+from ocelot.vla_inference import VLAInferenceEngine, find_best_command, preprocess_bgr
 
-
-def _preprocess(bgr: np.ndarray) -> np.ndarray:
-    """BGR uint8 HxWx3 → float32 (1, 3, 224, 224) ImageNet-normalised."""
-    import cv2  # available in sim container (python3-opencv)
-    rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
-    if rgb.shape[:2] != (224, 224):
-        rgb = cv2.resize(rgb, (224, 224), interpolation=cv2.INTER_LINEAR)
-    f = rgb.astype(np.float32) / 255.0
-    f = (f - _IMAGENET_MEAN) / _IMAGENET_STD       # HWC, normalised
-    f = f.transpose(2, 0, 1)[np.newaxis, ...]       # (1, 3, 224, 224)
-    return np.ascontiguousarray(f)
-
-
-def _find_best_command(requested: str, cache: dict[str, dict]) -> str:
-    """Return the closest command in the cache (exact match first, then substring)."""
-    if requested in cache:
-        return requested
-    # Substring match on whitespace-normalised strings
-    req_lower = requested.lower().strip()
-    for key in cache:
-        if req_lower in key.lower() or key.lower() in req_lower:
-            return key
-    # Fall back to "track the face" or the first key
-    for fallback in (
-        "track the face",
-        "look at the person",
-        "follow the person",
-        "keep the face centered",
-        "no face visible",
-    ):
-        if fallback in cache:
-            return fallback
-    return next(iter(cache))
+_preprocess = preprocess_bgr
+_find_best_command = find_best_command
 
 
 class VLANode(Node):
@@ -117,51 +79,36 @@ class VLANode(Node):
             )
             raise RuntimeError("checkpoint not set")
 
-        ckpt = Path(checkpoint_str)
-        token_cache_str = self.get_parameter("token_cache").value
-        token_cache_path = (
-            Path(token_cache_str)
-            if token_cache_str
-            else ckpt.with_name(ckpt.stem + "_tokens.json")
-        )
-
-        # Load ONNX model
+        cmd_requested = self.get_parameter("command").value
+        token_cache_str = self.get_parameter("token_cache").value or None
         try:
-            import onnxruntime as ort
+            self._engine = VLAInferenceEngine(
+                checkpoint=checkpoint_str,
+                token_cache=token_cache_str,
+            )
         except ImportError as e:
             self.get_logger().fatal(
                 "onnxruntime not installed. Run: pip3 install onnxruntime"
             )
             raise RuntimeError("onnxruntime missing") from e
-
-        self.get_logger().info(f"Loading ONNX model from {ckpt} …")
-        providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
-        self._sess = ort.InferenceSession(str(ckpt), providers=providers)
-        used_provider = self._sess.get_providers()[0]
-        self.get_logger().info(f"ONNX session ready (provider: {used_provider})")
-
-        # Load token cache
-        if not token_cache_path.exists():
+        except FileNotFoundError as e:
             self.get_logger().fatal(
-                f"Token cache not found: {token_cache_path}. "
-                "Run train/export_onnx.py on the host first."
+                f"{e}. Run train/export_onnx.py on the host first."
             )
-            raise RuntimeError("token cache missing")
+            raise RuntimeError("token cache missing") from e
 
-        token_cache: dict[str, dict] = json.loads(token_cache_path.read_text())
-        cmd_requested = self.get_parameter("command").value
-        cmd_actual    = _find_best_command(cmd_requested, token_cache)
+        self.get_logger().info(f"Loading ONNX model from {checkpoint_str} …")
+        self.get_logger().info(
+            f"ONNX session ready (provider: {self._engine.provider})"
+        )
+        cmd_actual = self._engine.resolve_command(cmd_requested)
         if cmd_actual != cmd_requested:
             self.get_logger().warn(
                 f"Command {cmd_requested!r} not in token cache; "
                 f"using {cmd_actual!r} instead."
             )
         self.get_logger().info(f"Command: {cmd_actual!r}")
-
-        tokens = token_cache[cmd_actual]
-        # Pre-build fixed numpy arrays (reused every frame — no allocation in the hot path)
-        self._input_ids      = np.array([tokens["input_ids"]],      dtype=np.int64)  # (1,77)
-        self._attention_mask = np.array([tokens["attention_mask"]], dtype=np.int64)  # (1,77)
+        self._command = cmd_actual
 
         self._bridge  = CvBridge()
         self._pub     = self.create_publisher(Twist, "/cmd_vel", 10)
@@ -186,22 +133,12 @@ class VLANode(Node):
             self.get_logger().warn(f"cv_bridge conversion failed: {exc}")
             return
 
-        frame = _preprocess(bgr)
-
-        actions = self._sess.run(
-            ["actions"],
-            {
-                "frames":         frame,
-                "input_ids":      self._input_ids,
-                "attention_mask": self._attention_mask,
-            },
-        )[0]  # (1, 2)
-
         max_vel = float(self.get_parameter("max_vel").value)
         deadband = float(self.get_parameter("deadband").value)
 
-        pan_vel  = float(actions[0, 0])
-        tilt_vel = float(actions[0, 1])
+        result = self._engine.predict_bgr(bgr, self._command)
+        pan_vel = float(result["pan_vel"])
+        tilt_vel = float(result["tilt_vel"])
 
         pan_in_db  = abs(pan_vel)  < deadband
         tilt_in_db = abs(tilt_vel) < deadband

@@ -1,6 +1,6 @@
 ---
 id: oce-nf01
-status: open
+status: closed
 deps: []
 links: [oce-wp85]
 created: 2026-04-09T00:00:00Z

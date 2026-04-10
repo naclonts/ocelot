@@ -1,7 +1,7 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, ExecuteProcess
 from launch.conditions import IfCondition, UnlessCondition
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
 import os
@@ -30,6 +30,11 @@ def generate_launch_description():
             description='Use classical Haar cascade tracker instead of VLA model.',
         ),
         DeclareLaunchArgument(
+            'use_remote_vla',
+            default_value='false',
+            description='Send frames to a remote HTTP VLA server instead of local ONNX.',
+        ),
+        DeclareLaunchArgument(
             'vla_checkpoint',
             default_value='/ws/src/ocelot/models/active.onnx',
             description='Path to the ONNX model (symlink → models/active.onnx by default).',
@@ -43,6 +48,11 @@ def generate_launch_description():
             'vla_deadband',
             default_value='0.03',
             description='Deadband threshold (rad/s) — model outputs below this are zeroed.',
+        ),
+        DeclareLaunchArgument(
+            'remote_vla_url',
+            default_value='http://127.0.0.1:8765/infer',
+            description='HTTP endpoint for offboard VLA inference.',
         ),
 
         Node(
@@ -75,7 +85,25 @@ def generate_launch_description():
                 'deadband':    LaunchConfiguration('vla_deadband'),
                 'enabled':     True,
             }],
-            condition=UnlessCondition(LaunchConfiguration('use_haar')),
+            condition=IfCondition(PythonExpression([
+                "'",
+                LaunchConfiguration('use_haar'),
+                "' == 'false' and '",
+                LaunchConfiguration('use_remote_vla'),
+                "' == 'false'",
+            ])),
+        ),
+        Node(
+            package='ocelot',
+            executable='remote_vla_client_node',
+            name='remote_vla_client_node',
+            parameters=[{
+                'server_url': LaunchConfiguration('remote_vla_url'),
+                'command': LaunchConfiguration('vla_command'),
+                'deadband': LaunchConfiguration('vla_deadband'),
+                'enabled': True,
+            }],
+            condition=IfCondition(LaunchConfiguration('use_remote_vla')),
         ),
         Node(
             package='web_video_server',

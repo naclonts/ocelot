@@ -10,6 +10,7 @@ servo_node:
     tilt_center: 160
     pan_limits: [0, 180]
     tilt_limits: [90, 180]
+    command_timeout_sec: 0.25
 
 tracker_node:
   ros__parameters:

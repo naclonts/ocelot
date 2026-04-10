@@ -1,6 +1,6 @@
 ---
 id: oce-dr01
-status: open
+status: closed
 deps: []
 links: [oce-wp85, oce-8n83]
 created: 2026-04-09T00:00:00Z

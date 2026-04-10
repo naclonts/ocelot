@@ -71,13 +71,15 @@ services:
 
     environment:
       - ROS_DOMAIN_ID=0
-      - ROS_LOCALHOST_ONLY=1
+      - ROS_LOCALHOST_ONLY=${ROS_LOCALHOST_ONLY:-0}
       - RECORD=${RECORD:-false}
       - VISUALIZE=${VISUALIZE:-false}
       - USE_HAAR=${USE_HAAR:-false}
+      - USE_REMOTE_VLA=${USE_REMOTE_VLA:-false}
       - VLA_COMMAND=${VLA_COMMAND:-track the face}
       - VLA_CHECKPOINT=${VLA_CHECKPOINT:-/ws/src/ocelot/models/active.onnx}
       - VLA_DEADBAND=${VLA_DEADBAND:-0.03}
+      - REMOTE_VLA_URL=${REMOTE_VLA_URL:-http://127.0.0.1:8765/infer}
       - OCELOT_ROOT=/ws/src/ocelot
     command: >
       bash -c "source /opt/ros/jazzy/setup.bash &&
@@ -92,9 +94,11 @@ services:
       record:=${RECORD:-false}
       visualize:=${VISUALIZE:-false}
       use_haar:=${USE_HAAR:-false}
+      use_remote_vla:=${USE_REMOTE_VLA:-false}
       vla_checkpoint:=${VLA_CHECKPOINT:-/ws/src/ocelot/models/active.onnx}
       \"vla_command:=${VLA_COMMAND:-track the face}\"
-      vla_deadband:=${VLA_DEADBAND:-0.03}"
+      vla_deadband:=${VLA_DEADBAND:-0.03}
+      remote_vla_url:=${REMOTE_VLA_URL:-http://127.0.0.1:8765/infer}"
     stdin_open: true
     tty: true
 

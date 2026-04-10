@@ -37,6 +37,7 @@ for _mod in (
 ):
     sys.modules.setdefault(_mod, mock.MagicMock())
 
+from ocelot.vla_inference import VLAInferenceEngine  # noqa: E402
 from ocelot.vla_node import _find_best_command, _preprocess  # noqa: E402
 
 # ---------------------------------------------------------------------------
@@ -348,3 +349,23 @@ class TestONNXInferencePath:
         out_second = sess.run(["actions"], inputs)[0]
 
         np.testing.assert_array_equal(out_first, out_second)
+
+    def test_shared_engine_predicts(self, tmp_path):
+        """Shared inference engine returns pan/tilt and resolves fallback commands."""
+        model_path = _export_onnx(tmp_path, model=_InputSensitiveModel())
+        token_cache = _make_token_cache(tmp_path)
+        engine = VLAInferenceEngine(
+            checkpoint=model_path,
+            token_cache=token_cache,
+            providers=["CPUExecutionProvider"],
+        )
+
+        result = engine.predict_bgr(
+            np.full((224, 224, 3), 64, dtype=np.uint8),
+            "please track the face now",
+        )
+
+        assert result["command"] == "track the face"
+        assert isinstance(result["pan_vel"], float)
+        assert isinstance(result["tilt_vel"], float)
+        assert result["inference_latency_ms"] >= 0.0
