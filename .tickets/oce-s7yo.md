@@ -1,6 +1,6 @@
 ---
 id: oce-s7yo
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-04-03T05:38:19Z
@@ -30,3 +30,9 @@ Start with approach #1 as simplest experiment. Compare against v0.1.0 on single-
 - Validated on hardware (Pi deployment) with acceptable real-world tracking
 - ONNX export + eval pipeline passes gate
 
+
+## Notes
+
+**2026-04-05T22:29:03Z**
+
+Run v0.1.1-single-face complete. Track-only MSE=0.004 (same as v0.1.0), overall MSE=0.0127 (vs v0.1.0's 0.005). Multi-face labels degraded as expected since training was single-face only. Eval gate passed. ONNX export at runs/v0.1.1-single-face/best.onnx.
