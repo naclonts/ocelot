@@ -32,6 +32,7 @@ class ServoNode(Node):
         self._tilt_pos = float(self.get_parameter('tilt_center').value)
         self._pan_vel = 0.0
         self._tilt_vel = 0.0
+        self._i2c_errors = 0
 
         self._kit = ServoKit(channels=16)
         self._kit.servo[PAN_CH].set_pulse_width_range(SERVO_MIN_PULSE, SERVO_MAX_PULSE)
@@ -57,8 +58,24 @@ class ServoNode(Node):
         self._pan_pos = max(self._pan_min, min(self._pan_max, self._pan_pos))
         self._tilt_pos = max(self._tilt_min, min(self._tilt_max, self._tilt_pos))
 
-        self._kit.servo[PAN_CH].angle = self._pan_pos
-        self._kit.servo[TILT_CH].angle = self._tilt_pos
+        try:
+            self._kit.servo[PAN_CH].angle = self._pan_pos
+            self._kit.servo[TILT_CH].angle = self._tilt_pos
+            self._i2c_errors = 0
+        except OSError as e:
+            self._i2c_errors += 1
+            self.get_logger().warn(
+                f'I2C error #{self._i2c_errors}: {e} — attempting reinit'
+            )
+            if self._i2c_errors >= 5:
+                self.get_logger().error('5 consecutive I2C errors — giving up')
+                raise
+            try:
+                self._kit = ServoKit(channels=16)
+                self._kit.servo[PAN_CH].set_pulse_width_range(SERVO_MIN_PULSE, SERVO_MAX_PULSE)
+                self._kit.servo[TILT_CH].set_pulse_width_range(SERVO_MIN_PULSE, SERVO_MAX_PULSE)
+            except OSError:
+                pass  # will retry next tick
 
     def _center_and_stop(self):
         self._kit.servo[PAN_CH].angle = self.get_parameter('pan_center').value
