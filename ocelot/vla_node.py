@@ -85,7 +85,13 @@ def _find_best_command(requested: str, cache: dict[str, dict]) -> str:
         if req_lower in key.lower() or key.lower() in req_lower:
             return key
     # Fall back to "track the face" or the first key
-    for fallback in ("track the face", "look at the person", "follow the person"):
+    for fallback in (
+        "track the face",
+        "look at the person",
+        "follow the person",
+        "keep the face centered",
+        "no face visible",
+    ):
         if fallback in cache:
             return fallback
     return next(iter(cache))

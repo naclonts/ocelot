@@ -89,6 +89,13 @@ _STATIC_COMMANDS: list[str] = [
     "keep the person closest to you centered",
     "focus on the closest face",
     "stay with the one right in front of you",
+    # centered / no-face training variants
+    "keep the face centered",
+    "keep the person centered",
+    "hold the face in the center",
+    "no face visible",
+    "there is no face",
+    "ignore the scene",
 ]
 
 

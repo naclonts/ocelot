@@ -107,6 +107,8 @@ _ORACLE_LABEL_MAP: dict[str, str] = {
     "track":        "track",
     "multi_left":   "multi_left",
     "multi_right":  "multi_right",
+    "centered":     "track",
+    "no_face":      "track",
 }
 
 
@@ -444,7 +446,11 @@ def run_collection(node: CollectNode, args) -> None:
 
     for ep_idx in range(args.base_ep, args.base_ep + args.n_episodes):
         seed   = args.base_seed + ep_idx
-        config = generator.sample(seed)
+        config = generator.sample(
+            seed,
+            no_face_rate=args.no_face_rate,
+            centered_rate=args.centered_rate,
+        )
 
         log.info("ep %06d: setup  seed=%d  label=%r", ep_idx, seed, config.label_key)
 
@@ -571,6 +577,8 @@ def run_collection(node: CollectNode, args) -> None:
         "perturb_interval":   args.perturb_interval,
         "perturb_range":      args.perturb_range,
         "perturb_duration":   PERTURB_DURATION,
+        "no_face_rate":       args.no_face_rate,
+        "centered_rate":      args.centered_rate,
         "git_hash":           git_hash,
     }
     (out_dir / "metadata.json").write_text(json.dumps(metadata, indent=2))
@@ -632,6 +640,14 @@ def main() -> None:
             "Camera half-FOV is ~0.524 rad (30°); default 0.45 keeps face in frame. "
             "Default: 0.45."
         ),
+    )
+    parser.add_argument(
+        "--no_face_rate", type=float, default=0.10,
+        help="Probability of sampling an empty-scene episode. Default: 0.10.",
+    )
+    parser.add_argument(
+        "--centered_rate", type=float, default=0.05,
+        help="Probability of sampling a centered single-face episode. Default: 0.05.",
     )
     args = parser.parse_args()
 

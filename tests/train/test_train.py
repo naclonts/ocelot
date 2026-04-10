@@ -240,6 +240,19 @@ class TestEvaluate:
         assert math.isnan(mean_loss)
         assert per_label == {}
 
+    def test_include_aux_returns_confidence_metric(self, model, criterion):
+        batch = make_batch(label_keys=["no_face"] * B)
+        result = evaluate(
+            model,
+            FakeLoader(batch),
+            criterion,
+            torch.device("cpu"),
+            include_aux=True,
+        )
+        assert isinstance(result, tuple) and len(result) == 3
+        _, _, aux = result
+        assert "confidence_accuracy" in aux
+
 
 # ---------------------------------------------------------------------------
 # Overfit (integration)

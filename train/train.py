@@ -131,6 +131,7 @@ def train_one_epoch(
     scaler: "torch.cuda.amp.GradScaler | None",
     scheduler: "torch.optim.lr_scheduler.LRScheduler | None" = None,
     grad_clip: float = 1.0,
+    confidence_weight: float = 1.0,
 ) -> float:
     """Run one training epoch. Returns mean batch loss."""
     model.train()
@@ -142,21 +143,44 @@ def train_one_epoch(
         targets        = batch["targets"].to(device, non_blocking=True)
         input_ids      = batch["input_ids"].to(device, non_blocking=True)
         attention_mask = batch["attention_mask"].to(device, non_blocking=True)
+        confidence_tgt = torch.tensor(
+            [0.0 if key == "no_face" else 1.0 for key in batch["label_keys"]],
+            dtype=torch.float32,
+            device=device,
+        )
 
         optimizer.zero_grad()
 
         if scaler is not None:
             with torch.amp.autocast("cuda"):
-                pred = model(frames, input_ids, attention_mask)
+                pred, confidence = model(
+                    frames,
+                    input_ids,
+                    attention_mask,
+                    gate_actions=False,
+                    return_confidence=True,
+                )
                 loss = criterion(pred, targets)
+                loss = loss + confidence_weight * nn.functional.binary_cross_entropy(
+                    confidence, confidence_tgt
+                )
             scaler.scale(loss).backward()
             scaler.unscale_(optimizer)
             nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
             scaler.step(optimizer)
             scaler.update()
         else:
-            pred = model(frames, input_ids, attention_mask)
+            pred, confidence = model(
+                frames,
+                input_ids,
+                attention_mask,
+                gate_actions=False,
+                return_confidence=True,
+            )
             loss = criterion(pred, targets)
+            loss = loss + confidence_weight * nn.functional.binary_cross_entropy(
+                confidence, confidence_tgt
+            )
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
             optimizer.step()
@@ -176,17 +200,21 @@ def evaluate(
     loader: DataLoader,
     criterion: nn.Module,
     device: torch.device,
-) -> tuple[float, dict[str, float]]:
+    include_aux: bool = False,
+) -> tuple[float, dict[str, float]] | tuple[float, dict[str, float], dict[str, float]]:
     """Evaluate on val/test split.
 
     Returns:
         mean_loss:     mean batch MSE over the split
         per_label_mse: dict mapping label_key → mean per-sample MSE
+        aux_metrics:    optional confidence metrics when include_aux=True
     """
     model.eval()
     total_loss = 0.0
     n_batches = 0
     label_losses: dict[str, list[float]] = {}
+    confidence_hits = 0
+    confidence_total = 0
 
     for batch in loader:
         frames         = batch["frames"].to(device, non_blocking=True)
@@ -195,7 +223,12 @@ def evaluate(
         attention_mask = batch["attention_mask"].to(device, non_blocking=True)
         label_keys     = batch["label_keys"]
 
-        pred = model(frames, input_ids, attention_mask)
+        pred, confidence = model(
+            frames,
+            input_ids,
+            attention_mask,
+            return_confidence=True,
+        )
         loss = criterion(pred, targets)
 
         total_loss += loss.item()
@@ -206,8 +239,24 @@ def evaluate(
         for key, val in zip(label_keys, per_sample.tolist()):
             label_losses.setdefault(key, []).append(val)
 
+        if include_aux:
+            face_present = torch.tensor(
+                [0 if key == "no_face" else 1 for key in label_keys],
+                device=device,
+                dtype=torch.long,
+            )
+            confidence_hits += int((confidence >= 0.5).long().eq(face_present).sum().item())
+            confidence_total += len(label_keys)
+
     mean_loss = total_loss / n_batches if n_batches > 0 else float("nan")
     per_label_mse = {k: sum(v) / len(v) for k, v in sorted(label_losses.items())}
+    if include_aux:
+        aux = {
+            "confidence_accuracy": (
+                confidence_hits / confidence_total if confidence_total > 0 else float("nan")
+            ),
+        }
+        return mean_loss, per_label_mse, aux
     return mean_loss, per_label_mse
 
 
@@ -267,6 +316,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--gradient_prob", type=float, default=0.3)
     p.add_argument("--gradient_strength_min", type=float, default=0.08)
     p.add_argument("--gradient_strength_max", type=float, default=0.25)
+    p.add_argument("--confidence_weight", type=float, default=1.0,
+                   help="Weight for the confidence-head binary loss (0 to disable)")
     p.add_argument("--experiment",      type=str,   default="ocelot",
                    help="MLflow experiment name")
     return p.parse_args()
@@ -391,6 +442,7 @@ def main() -> None:
             "n_trainable":     n_trainable,
             "warmup_steps":    args.warmup_steps,
             "domain_randomization": args.domain_randomization,
+            "confidence_weight": args.confidence_weight,
         })
         if args.domain_randomization:
             mlflow.log_params({
@@ -420,10 +472,16 @@ def main() -> None:
             train_loss = train_one_epoch(
                 model, train_loader, optimizer, criterion, device, scaler,
                 scheduler=scheduler,
+                confidence_weight=args.confidence_weight,
             )
-            val_loss, per_label_mse = evaluate(
-                model, val_loader, criterion, device
+            val_result = evaluate(
+                model, val_loader, criterion, device, include_aux=True
             )
+            if len(val_result) == 3:
+                val_loss, per_label_mse, aux_metrics = val_result
+            else:
+                val_loss, per_label_mse = val_result
+                aux_metrics = {}
 
             current_lr = scheduler.get_last_lr()[0]
             metrics: dict[str, float] = {
@@ -431,6 +489,7 @@ def main() -> None:
                 "val_loss":   val_loss,
                 "lr":         current_lr,
                 **{f"val_mse_{k}": v for k, v in per_label_mse.items()},
+                **{f"val_{k}": v for k, v in aux_metrics.items()},
             }
             mlflow.log_metrics(metrics, step=epoch)
 
@@ -440,6 +499,8 @@ def main() -> None:
             )
             for k, v in per_label_mse.items():
                 log.info("  val_mse_%-22s %.5f", k, v)
+            for k, v in aux_metrics.items():
+                log.info("  val_%-26s %.5f", k, v)
 
             ckpt_state = {
                 "epoch": epoch,

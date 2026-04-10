@@ -36,6 +36,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import inspect
 import logging
 import sys
 from pathlib import Path
@@ -89,10 +90,12 @@ def run_inference(
 ) -> dict:
     """Run inference on a DataLoader. Returns arrays of preds, targets, label_keys."""
     model.eval()
+    supports_confidence = "return_confidence" in inspect.signature(model.forward).parameters
 
     all_pred   = []
     all_target = []
     all_keys   = []
+    all_conf   = []
 
     for batch in loader:
         frames         = batch["frames"].to(device, non_blocking=True)
@@ -101,17 +104,31 @@ def run_inference(
         attention_mask = batch["attention_mask"].to(device, non_blocking=True)
         label_keys     = batch["label_keys"]
 
-        pred = model(frames, input_ids, attention_mask)
+        if supports_confidence:
+            pred, confidence = model(
+                frames,
+                input_ids,
+                attention_mask,
+                return_confidence=True,
+            )
+        else:
+            pred = model(frames, input_ids, attention_mask)
+            confidence = None
 
         all_pred.append(pred.cpu().numpy())
         all_target.append(targets.cpu().numpy())
         all_keys.extend(label_keys)
+        if confidence is not None:
+            all_conf.append(confidence.cpu().numpy())
 
-    return {
+    result = {
         "pred":   np.concatenate(all_pred,   axis=0),   # (N, 2)
         "target": np.concatenate(all_target, axis=0),   # (N, 2)
         "keys":   all_keys,                             # list[str], length N
     }
+    if all_conf:
+        result["confidence"] = np.concatenate(all_conf, axis=0)
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -205,6 +222,7 @@ def print_report(results: dict) -> None:
     pred   = results["pred"]    # (N, 2)
     target = results["target"]  # (N, 2)
     keys   = results["keys"]
+    confidence = results.get("confidence")
 
     pan_pred,  tilt_pred  = pred[:, 0],   pred[:, 1]
     pan_tgt,   tilt_tgt   = target[:, 0], target[:, 1]
@@ -244,6 +262,10 @@ def print_report(results: dict) -> None:
     print(f"  {'GT range':30}  "
           f"[{pan_tgt.min():.3f}, {pan_tgt.max():.3f}]  "
           f"[{tilt_tgt.min():.3f}, {tilt_tgt.max():.3f}]")
+    if confidence is not None:
+        face_present = np.array([k != "no_face" for k in keys])
+        conf_acc = (confidence >= 0.5).astype(bool) == face_present
+        print(f"  {'Confidence acc (%)':30}  {conf_acc.mean() * 100:>8.1f}")
 
     # Per-label breakdown
     label_set = sorted(set(keys))

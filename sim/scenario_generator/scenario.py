@@ -148,65 +148,14 @@ class ScenarioGenerator:
         self._backgrounds_dir = backgrounds_dir
         self._faces_assets_dir = faces_assets_dir
 
-    def sample(self, seed: int) -> "ScenarioConfig":
-        from sim.scenario_generator.labels import assign_label  # lazy import avoids cycles
-
-        rng = random.Random(seed)
-
-        # ── Number of faces ──────────────────────────────────────────────────
-        # ~60% single, ~30% two, ~10% three
-        n_faces = rng.choices([1, 2, 3], weights=[6, 3, 1], k=1)[0]
-
-        # ── Face configs ─────────────────────────────────────────────────────
-        faces: list[FaceConfig] = []
-        for _ in range(n_faces):
-            entry = rng.choice(self._faces)
-            fid = entry["face_id"]
-            texture_path = str(
-                (self._faces_assets_dir / f"{fid}.png").resolve()
-            )
-            face_x = rng.uniform(2.0, 4.0)
-            face_y = rng.uniform(-1.0, 1.0)
-            _dz    = face_x * math.tan(_VFOV_HALF)
-            face_z = rng.uniform(max(0.3, _CAM_Z - _dz), min(1.5, _CAM_Z + _dz))
-            faces.append(FaceConfig(
-                face_id=fid,
-                texture_path=texture_path,
-                initial_x=face_x,
-                initial_y=face_y,
-                initial_z=face_z,
-                motion=rng.choices(
-                    self._MOTION_TYPES, weights=self._MOTION_WEIGHTS, k=1
-                )[0],
-                speed=rng.uniform(0.05, 0.5),
-                period=rng.uniform(6.0, 20.0),
-            ))
-
-        # For multi-face scenarios, constrain the target to be the leftmost or
-        # rightmost face by initial_y.  This guarantees assign_label() always
-        # finds a position-based label (multi_left / multi_right) — or an
-        # attribute-based one if the face happens to have a distinguishing
-        # attribute.  A target in the middle of 3 faces with no attribute
-        # cannot be described unambiguously, so we never produce that case.
-        if n_faces > 1:
-            by_y = sorted(range(n_faces), key=lambda i: faces[i].initial_y)
-            target_face_idx = rng.choice([by_y[0], by_y[-1]])
-        else:
-            target_face_idx = 0
-
-        # ── Background ───────────────────────────────────────────────────────
+    def _base_scene_params(self, rng: random.Random) -> dict:
         bg = rng.choice(self._backgrounds)
         background_id = bg["id"]
-        background_path = str(
-            (self._backgrounds_dir / bg["file"]).resolve()
-        )
+        background_path = str((self._backgrounds_dir / bg["file"]).resolve())
 
-        # ── Lighting ─────────────────────────────────────────────────────────
         lighting_azimuth_deg   = rng.uniform(0, 360)
         lighting_elevation_deg = rng.uniform(15, 75)
         lighting_intensity     = rng.uniform(0.5, 2.0)
-        # Subtle warm/cool tint on the key light — each channel [0.85, 1.0]
-        # so the deviation from pure white is at most 0.15 per channel.
         key_color_rgb = (
             rng.uniform(0.85, 1.0),
             rng.uniform(0.85, 1.0),
@@ -218,8 +167,6 @@ class ScenarioGenerator:
             rng.uniform(0.2, 0.8),
         )
         fill_intensity = rng.uniform(0.2, 0.9)
-
-        # ── Distractors ──────────────────────────────────────────────────────
         distractor_count = rng.randint(0, 2)
         distractors: list[DistractorConfig] = []
         for _ in range(distractor_count):
@@ -235,34 +182,69 @@ class ScenarioGenerator:
                 initial_z=rng.uniform(0.3, 1.5),
                 speed=rng.uniform(0.02, 0.2),
             ))
-
-        # ── Camera augmentation ──────────────────────────────────────────────
         camera_noise_sigma       = rng.uniform(0.0, 0.015)
         camera_brightness_offset = rng.uniform(-20.0, 20.0)
-
-        # ── Language label ───────────────────────────────────────────────────
-        face_attrs = {f["face_id"]: f for f in self._faces}
-        label_key, language_label = assign_label(
-            faces, target_face_idx, face_attrs, rng
-        )
-
-        # ── scenario_id: SHA1[:8] of all params (for dedup / split) ─────────
-        config_for_hash = {
-            "seed": seed,
-            "faces": [asdict(f) for f in faces],
-            "target_face_idx": target_face_idx,
+        return {
             "background_id": background_id,
             "background_path": background_path,
             "lighting_azimuth_deg": lighting_azimuth_deg,
             "lighting_elevation_deg": lighting_elevation_deg,
             "lighting_intensity": lighting_intensity,
-            "key_color_rgb": list(key_color_rgb),
-            "ambient_rgb": list(ambient_rgb),
+            "key_color_rgb": key_color_rgb,
+            "ambient_rgb": ambient_rgb,
             "fill_intensity": fill_intensity,
             "distractor_count": distractor_count,
-            "distractors": [asdict(d) for d in distractors],
+            "distractors": distractors,
             "camera_noise_sigma": camera_noise_sigma,
             "camera_brightness_offset": camera_brightness_offset,
+        }
+
+    def _sample_tracking(self, seed: int, rng: random.Random) -> "ScenarioConfig":
+        from sim.scenario_generator.labels import assign_label  # lazy import avoids cycles
+
+        # ── Number of faces ──────────────────────────────────────────────────
+        # ~60% single, ~30% two, ~10% three
+        n_faces = rng.choices([1, 2, 3], weights=[6, 3, 1], k=1)[0]
+
+        # ── Face configs ─────────────────────────────────────────────────────
+        faces: list[FaceConfig] = []
+        for _ in range(n_faces):
+            entry = rng.choice(self._faces)
+            fid = entry["face_id"]
+            texture_path = str((self._faces_assets_dir / f"{fid}.png").resolve())
+            face_x = rng.uniform(2.0, 4.0)
+            face_y = rng.uniform(-1.0, 1.0)
+            _dz = face_x * math.tan(_VFOV_HALF)
+            face_z = rng.uniform(max(0.3, _CAM_Z - _dz), min(1.5, _CAM_Z + _dz))
+            faces.append(FaceConfig(
+                face_id=fid,
+                texture_path=texture_path,
+                initial_x=face_x,
+                initial_y=face_y,
+                initial_z=face_z,
+                motion=rng.choices(
+                    self._MOTION_TYPES, weights=self._MOTION_WEIGHTS, k=1
+                )[0],
+                speed=rng.uniform(0.05, 0.5),
+                period=rng.uniform(6.0, 20.0),
+            ))
+
+        if n_faces > 1:
+            by_y = sorted(range(n_faces), key=lambda i: faces[i].initial_y)
+            target_face_idx = rng.choice([by_y[0], by_y[-1]])
+        else:
+            target_face_idx = 0
+
+        scene = self._base_scene_params(rng)
+        face_attrs = {f["face_id"]: f for f in self._faces}
+        label_key, language_label = assign_label(faces, target_face_idx, face_attrs, rng)
+
+        config_for_hash = {
+            "seed": seed,
+            "episode_kind": "tracking",
+            "faces": [asdict(f) for f in faces],
+            "target_face_idx": target_face_idx,
+            **scene,
             "label_key": label_key,
             "language_label": language_label,
         }
@@ -275,18 +257,94 @@ class ScenarioGenerator:
             seed=seed,
             faces=faces,
             target_face_idx=target_face_idx,
-            background_id=background_id,
-            background_path=background_path,
-            lighting_azimuth_deg=lighting_azimuth_deg,
-            lighting_elevation_deg=lighting_elevation_deg,
-            lighting_intensity=lighting_intensity,
-            key_color_rgb=key_color_rgb,
-            ambient_rgb=ambient_rgb,
-            fill_intensity=fill_intensity,
-            distractor_count=distractor_count,
-            distractors=distractors,
-            camera_noise_sigma=camera_noise_sigma,
-            camera_brightness_offset=camera_brightness_offset,
             label_key=label_key,
             language_label=language_label,
+            **scene,
         )
+
+    def _sample_no_face(self, seed: int, rng: random.Random) -> "ScenarioConfig":
+        scene = self._base_scene_params(rng)
+        config_for_hash = {
+            "seed": seed,
+            "episode_kind": "no_face",
+            "faces": [],
+            "target_face_idx": -1,
+            **scene,
+            "label_key": "no_face",
+            "language_label": "no face visible",
+        }
+        scenario_id = hashlib.sha1(
+            json.dumps(config_for_hash, sort_keys=True, default=str).encode()
+        ).hexdigest()[:8]
+
+        return ScenarioConfig(
+            scenario_id=scenario_id,
+            seed=seed,
+            faces=[],
+            target_face_idx=-1,
+            label_key="no_face",
+            language_label="no face visible",
+            **scene,
+        )
+
+    def _sample_centered(self, seed: int, rng: random.Random) -> "ScenarioConfig":
+        scene = self._base_scene_params(rng)
+        entry = rng.choice(self._faces)
+        fid = entry["face_id"]
+        texture_path = str((self._faces_assets_dir / f"{fid}.png").resolve())
+        face_x = rng.uniform(2.0, 4.0)
+        _dz = face_x * math.tan(_VFOV_HALF)
+        face_z = rng.uniform(max(0.3, _CAM_Z - _dz), min(1.5, _CAM_Z + _dz))
+        face = FaceConfig(
+            face_id=fid,
+            texture_path=texture_path,
+            initial_x=face_x,
+            initial_y=0.0,
+            initial_z=face_z,
+            motion="static",
+            speed=0.0,
+            period=rng.uniform(6.0, 20.0),
+        )
+
+        config_for_hash = {
+            "seed": seed,
+            "episode_kind": "centered",
+            "faces": [asdict(face)],
+            "target_face_idx": 0,
+            **scene,
+            "label_key": "centered",
+            "language_label": "keep the face centered",
+        }
+        scenario_id = hashlib.sha1(
+            json.dumps(config_for_hash, sort_keys=True, default=str).encode()
+        ).hexdigest()[:8]
+
+        return ScenarioConfig(
+            scenario_id=scenario_id,
+            seed=seed,
+            faces=[face],
+            target_face_idx=0,
+            label_key="centered",
+            language_label="keep the face centered",
+            **scene,
+        )
+
+    def sample(
+        self,
+        seed: int,
+        no_face_rate: float = 0.0,
+        centered_rate: float = 0.0,
+    ) -> "ScenarioConfig":
+        if no_face_rate < 0.0 or centered_rate < 0.0:
+            raise ValueError("no_face_rate and centered_rate must be non-negative")
+        if no_face_rate + centered_rate > 1.0:
+            raise ValueError("no_face_rate + centered_rate must be <= 1.0")
+        rng = random.Random(seed)
+        if no_face_rate <= 0.0 and centered_rate <= 0.0:
+            return self._sample_tracking(seed, rng)
+        roll = rng.random()
+        if roll < no_face_rate:
+            return self._sample_no_face(seed, rng)
+        if roll < no_face_rate + centered_rate:
+            return self._sample_centered(seed, rng)
+        return self._sample_tracking(seed, rng)

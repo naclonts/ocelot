@@ -163,6 +163,7 @@ class OracleNode(Node):
                 available[n] = self._face_positions[n]
 
         if not available:
+            self._pub.publish(Twist())
             return
 
         # Rotation matrices for current joint angles.

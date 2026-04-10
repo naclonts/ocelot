@@ -81,6 +81,15 @@ class TestForward:
         assert out[:, 0].shape == (B,), "pan_vel channel wrong shape"
         assert out[:, 1].shape == (B,), "tilt_vel channel wrong shape"
 
+    def test_return_confidence(self, model, inputs):
+        frames, ids, mask = inputs
+        actions, confidence = model(
+            frames, ids, mask, gate_actions=False, return_confidence=True
+        )
+        assert actions.shape == (B, 2)
+        assert confidence.shape == (B,)
+        assert torch.all((confidence >= 0.0) & (confidence <= 1.0))
+
     def test_padding_mask_applied(self, model):
         """Output should differ when padding positions are masked vs unmasked.
 
@@ -219,6 +228,13 @@ class TestArchitecture:
         last = list(m.action_head.children())[-1]
         assert isinstance(last, torch.nn.Linear)
         assert last.out_features == 2
+
+    def test_confidence_head_has_one_output(self):
+        """Confidence head final linear layer must output dim=1."""
+        m = VLAModel(pretrained=False)
+        last = list(m.confidence_head.children())[0]
+        assert isinstance(last, torch.nn.Linear)
+        assert last.out_features == 1
 
     def test_fusion_norm_hidden_dim(self, model):
         """Each LayerNorm in fusion_norms must match VIS_DIM."""

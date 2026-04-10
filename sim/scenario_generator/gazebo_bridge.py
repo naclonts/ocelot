@@ -459,18 +459,19 @@ class GazeboBridge:
             config.ambient_rgb,
             getattr(config, "fill_intensity", 0.6),
         )
-        # Spawn target face as face_0 so PosePublisher (gated on "face_0") always
-        # attaches to the oracle's tracking target regardless of target_face_idx.
-        target_idx = config.target_face_idx
-        ordered_faces = [config.faces[target_idx]] + [
-            f for i, f in enumerate(config.faces) if i != target_idx
-        ]
-        for i, face_cfg in enumerate(ordered_faces):
-            self.spawn_face(
-                name=f"face_{i}",
-                pos=(face_cfg.initial_x, face_cfg.initial_y, face_cfg.initial_z),
-                texture_abs_path=face_cfg.texture_path,
-            )
+        if config.faces:
+            # Spawn target face as face_0 so PosePublisher (gated on "face_0") always
+            # attaches to the oracle's tracking target regardless of target_face_idx.
+            target_idx = config.target_face_idx
+            ordered_faces = [config.faces[target_idx]] + [
+                f for i, f in enumerate(config.faces) if i != target_idx
+            ]
+            for i, face_cfg in enumerate(ordered_faces):
+                self.spawn_face(
+                    name=f"face_{i}",
+                    pos=(face_cfg.initial_x, face_cfg.initial_y, face_cfg.initial_z),
+                    texture_abs_path=face_cfg.texture_path,
+                )
         for i, dist_cfg in enumerate(config.distractors):
             self.spawn_distractor(
                 name=f"distractor_{i}",

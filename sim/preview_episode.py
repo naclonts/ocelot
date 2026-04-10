@@ -72,6 +72,8 @@ _ORACLE_LABEL_MAP = {
     "multi_left":  "multi_left",
     "multi_right": "multi_right",
     "multi_attr":  "track",
+    "centered":    "track",
+    "no_face":     "track",
 }
 
 

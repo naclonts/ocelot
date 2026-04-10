@@ -77,17 +77,18 @@ class EpisodeRunner:
 
         # Reorder faces to match bridge ordering: target → face_0, others → face_1, face_2…
         # Must mirror the reordering done in GazeboBridge.setup_episode().
-        target_idx = config.target_face_idx
-        ordered_faces = [config.faces[target_idx]] + [
-            f for i, f in enumerate(config.faces) if i != target_idx
-        ]
-
-        # One motion pattern per face.
         self._face_motions = []
-        for i, face in enumerate(ordered_faces):
-            pattern = make_motion(face.motion, face.speed, face.period, rng)
-            pattern.reset(face.initial_x, face.initial_y, face.initial_z)
-            self._face_motions.append((f"face_{i}", pattern))
+        if config.faces:
+            target_idx = config.target_face_idx
+            ordered_faces = [config.faces[target_idx]] + [
+                f for i, f in enumerate(config.faces) if i != target_idx
+            ]
+
+            # One motion pattern per face.
+            for i, face in enumerate(ordered_faces):
+                pattern = make_motion(face.motion, face.speed, face.period, rng)
+                pattern.reset(face.initial_x, face.initial_y, face.initial_z)
+                self._face_motions.append((f"face_{i}", pattern))
 
         # Distractors always use random walk (no motion field in DistractorConfig).
         self._distractor_motions = []

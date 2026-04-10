@@ -194,6 +194,22 @@ class TestLabels:
 
 class TestBoundsAndDistributions:
 
+    def test_no_face_sampling(self, generator):
+        cfg = generator.sample(0, no_face_rate=1.0)
+        assert cfg.label_key == "no_face"
+        assert cfg.language_label == "no face visible"
+        assert cfg.faces == []
+        assert cfg.target_face_idx == -1
+
+    def test_centered_sampling(self, generator):
+        cfg = generator.sample(1, centered_rate=1.0)
+        assert cfg.label_key == "centered"
+        assert cfg.language_label == "keep the face centered"
+        assert len(cfg.faces) == 1
+        assert cfg.faces[0].motion == "static"
+        assert cfg.faces[0].speed == 0.0
+        assert cfg.faces[0].initial_y == 0.0
+
     def test_bounds_check(self, generator):
         """All numeric params must be within declared ranges for 1000 samples."""
         for seed in range(1000):
@@ -443,6 +459,24 @@ class TestSetupEpisodeFaceOrdering:
         spawned_names = [c.kwargs["name"] for c in calls]
         assert sorted(spawned_names) == ["face_0", "face_1", "face_2"]
 
+    def test_no_face_episode_spawns_no_faces(self):
+        from unittest.mock import MagicMock
+        from sim.scenario_generator.gazebo_bridge import GazeboBridge
+
+        bridge = GazeboBridge(world="test_world")
+        bridge.spawn_face = MagicMock(return_value=True)
+        bridge.spawn_background = MagicMock(return_value=True)
+        bridge.spawn_key_light = MagicMock(return_value=True)
+        bridge.spawn_fill_light = MagicMock(return_value=True)
+        bridge.spawn_distractor = MagicMock(return_value=True)
+        bridge.teardown_episode = MagicMock()
+
+        config = _make_scenario_config([], target_face_idx=-1, label_key="no_face")
+        bridge.setup_episode(config)
+
+        bridge.spawn_face.assert_not_called()
+        bridge.spawn_distractor.assert_not_called()
+
 
 # ---------------------------------------------------------------------------
 # Face reordering tests — EpisodeRunner.setup()
@@ -553,4 +587,3 @@ class TestEpisodeRunnerLabelKey:
         calls = self._setup_runner("multi_right", n_faces=2)
         assert len(calls) == 2
         assert self._find_param_call(calls, "label_key")[-1] == "multi_right"
-

@@ -18,13 +18,14 @@ Architecture
                pool_scores → softmax → weighted sum → (B, 384)
                       │
               MLP action head 384→256→64→2
+              Confidence head 384→1 → sigmoid
                       │
               2.0 * tanh(x)  ← bounded to (−2, 2) rad/s
                       │
-              (pan_vel, tilt_vel)
+              (pan_vel, tilt_vel) gated by confidence
 
 Frozen encoders account for ~85M params (DINOv2-small + CLIP text).
-Trainable params: txt_proj + fusion + fusion_norms + pool_scores + action_head ≈ 1.5-2M.
+Trainable params: txt_proj + fusion + fusion_norms + pool_scores + action_head + confidence_head ≈ 1.5-2M.
 
 Design notes
 ------------
@@ -174,6 +175,12 @@ class VLAModel(nn.Module):
             nn.Linear(64, 2),
         )
 
+        # Confidence head: predicts whether a face is present in the frame.
+        self.confidence_head = nn.Sequential(
+            nn.Linear(self.VIS_DIM, 1),
+            nn.Sigmoid(),
+        )
+
     def train(self, mode: bool = True) -> VLAModel:
         """Override to keep frozen encoders permanently in eval mode."""
         super().train(mode)
@@ -186,7 +193,9 @@ class VLAModel(nn.Module):
         frames: torch.Tensor,
         input_ids: torch.Tensor,
         attention_mask: torch.Tensor,
-    ) -> torch.Tensor:
+        gate_actions: bool = True,
+        return_confidence: bool = False,
+    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
         """Run a forward pass.
 
         Args:
@@ -197,6 +206,7 @@ class VLAModel(nn.Module):
         Returns:
             actions: (B, 2) float32 — predicted (pan_vel, tilt_vel) in rad/s,
                      bounded to (−2, 2) via 2.0 * tanh(x)
+            confidence: (B,) float32 — face-present probability in [0, 1]
         """
         # no_grad disables gradient tracking for the frozen encoder forward passes.
         # inference_mode cannot be used here: nn.Linear saves its input tensor for
@@ -228,7 +238,15 @@ class VLAModel(nn.Module):
         weights = torch.softmax(self.pool_scores(patches), dim=1)               # (B, 256,   1)
         spatial = (weights * patches).sum(dim=1)                                # (B,       384)
 
-        return 2.0 * torch.tanh(self.action_head(spatial))                      # (B, 2)
+        actions = 2.0 * torch.tanh(self.action_head(spatial))                   # (B, 2)
+        confidence = self.confidence_head(spatial).squeeze(-1)                  # (B,)
+
+        if gate_actions:
+            actions = actions * confidence.unsqueeze(-1)
+
+        if return_confidence:
+            return actions, confidence
+        return actions
 
 
 # ---------------------------------------------------------------------------

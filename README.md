@@ -168,6 +168,16 @@ python3 sim/data_gen/merge_shards.py \
 
 `collect_parallel.sh` runs this automatically at the end of a full run. If containers were killed early, run it manually. The merger auto-discovers all `shard_N/` directories, deduplicates episode IDs across shards, regenerates train/val/test splits, and writes `sim/dataset/merged/`.
 
+For zero-velocity supervision, `collect_data.py` can also sample `no_face` and `centered` episodes:
+
+```bash
+python3 sim/data_gen/collect_data.py \
+    --n_episodes 1000 \
+    --output sim/dataset \
+    --no_face_rate 0.10 \
+    --centered_rate 0.05
+```
+
 #### Training
 
 Install training dependencies:
@@ -218,6 +228,7 @@ python3 train/train.py \
     --batch_size 64 \
     --num_workers 12 \
     --amp \
+    --confidence_weight 1.0 \
     --experiment ocelot-v0.1.0
 ```
 
