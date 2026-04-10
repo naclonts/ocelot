@@ -32,6 +32,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+from dataclasses import asdict
 import logging
 import sys
 from pathlib import Path
@@ -49,6 +50,7 @@ from torch.utils.data import DataLoader
 
 from train.dataset import OcelotDataset
 from train.model import VLAModel
+from train.transforms import DomainRandomizationConfig, DomainRandomizationTransform
 
 logging.basicConfig(
     level=logging.INFO,
@@ -70,12 +72,27 @@ def build_loaders(
     max_episodes: int | None = None,
     shards: list[int] | None = None,
     label_keys: list[str] | None = None,
+    *,
+    train_augment=None,
 ) -> tuple[DataLoader, DataLoader]:
     """Build train and val DataLoaders backed by OcelotDataset."""
     collate = lambda b: OcelotDataset.collate_fn(b, tokenizer)  # noqa: E731
 
-    train_ds = OcelotDataset("train", dataset_dir, max_episodes=max_episodes, shards=shards, label_keys=label_keys)
-    val_ds   = OcelotDataset("val",   dataset_dir, max_episodes=max_episodes, shards=shards, label_keys=label_keys)
+    train_ds = OcelotDataset(
+        "train",
+        dataset_dir,
+        augment=train_augment,
+        max_episodes=max_episodes,
+        shards=shards,
+        label_keys=label_keys,
+    )
+    val_ds   = OcelotDataset(
+        "val",
+        dataset_dir,
+        max_episodes=max_episodes,
+        shards=shards,
+        label_keys=label_keys,
+    )
 
     train_loader = DataLoader(
         train_ds,
@@ -229,6 +246,27 @@ def parse_args() -> argparse.Namespace:
                    help="Only train on these shard numbers (e.g. --shards 26 27 28 29 30 31)")
     p.add_argument("--label_keys",     type=str,   nargs="+", default=None, metavar="KEY",
                    help="Only train on episodes with these label_key values (e.g. --label_keys track)")
+    p.add_argument("--domain_randomization", action="store_true",
+                   help="Apply training-only visual augmentations before ImageNet normalization")
+    p.add_argument("--color_jitter_prob", type=float, default=1.0)
+    p.add_argument("--brightness_jitter", type=float, default=0.2)
+    p.add_argument("--contrast_jitter", type=float, default=0.2)
+    p.add_argument("--saturation_jitter", type=float, default=0.2)
+    p.add_argument("--hue_jitter", type=float, default=0.1)
+    p.add_argument("--blur_prob", type=float, default=0.3)
+    p.add_argument("--blur_kernel_min", type=int, default=3)
+    p.add_argument("--blur_kernel_max", type=int, default=7)
+    p.add_argument("--blur_sigma_min", type=float, default=0.1)
+    p.add_argument("--blur_sigma_max", type=float, default=2.0)
+    p.add_argument("--noise_prob", type=float, default=0.3)
+    p.add_argument("--noise_sigma_max", type=float, default=0.05)
+    p.add_argument("--cutout_prob", type=float, default=0.2)
+    p.add_argument("--cutout_min_scale", type=float, default=0.02)
+    p.add_argument("--cutout_max_scale", type=float, default=0.08)
+    p.add_argument("--cutout_max_patches", type=int, default=1)
+    p.add_argument("--gradient_prob", type=float, default=0.3)
+    p.add_argument("--gradient_strength_min", type=float, default=0.08)
+    p.add_argument("--gradient_strength_max", type=float, default=0.25)
     p.add_argument("--experiment",      type=str,   default="ocelot",
                    help="MLflow experiment name")
     return p.parse_args()
@@ -256,8 +294,34 @@ def main() -> None:
         log.info("Shards: %s", args.shards)
     if args.label_keys is not None:
         log.info("Label keys: %s", args.label_keys)
+    train_augment = None
+    if args.domain_randomization:
+        aug_cfg = DomainRandomizationConfig(
+            color_jitter_prob=args.color_jitter_prob,
+            brightness=args.brightness_jitter,
+            contrast=args.contrast_jitter,
+            saturation=args.saturation_jitter,
+            hue=args.hue_jitter,
+            blur_prob=args.blur_prob,
+            blur_kernel_min=args.blur_kernel_min,
+            blur_kernel_max=args.blur_kernel_max,
+            blur_sigma_min=args.blur_sigma_min,
+            blur_sigma_max=args.blur_sigma_max,
+            noise_prob=args.noise_prob,
+            noise_sigma_max=args.noise_sigma_max,
+            cutout_prob=args.cutout_prob,
+            cutout_min_scale=args.cutout_min_scale,
+            cutout_max_scale=args.cutout_max_scale,
+            cutout_max_patches=args.cutout_max_patches,
+            gradient_prob=args.gradient_prob,
+            gradient_strength_min=args.gradient_strength_min,
+            gradient_strength_max=args.gradient_strength_max,
+        )
+        train_augment = DomainRandomizationTransform(aug_cfg)
+        log.info("Domain randomization enabled: %s", asdict(aug_cfg))
     train_loader, val_loader = build_loaders(
         args.dataset_dir, args.batch_size, args.num_workers, tokenizer,
+        train_augment=train_augment,
         max_episodes=args.max_episodes,
         shards=args.shards,
         label_keys=args.label_keys,
@@ -326,7 +390,12 @@ def main() -> None:
             "label_keys":      str(args.label_keys) if args.label_keys else "all",
             "n_trainable":     n_trainable,
             "warmup_steps":    args.warmup_steps,
+            "domain_randomization": args.domain_randomization,
         })
+        if args.domain_randomization:
+            mlflow.log_params({
+                f"aug_{k}": v for k, v in asdict(aug_cfg).items()
+            })
 
         best_val_loss = float("inf")
         start_epoch = 0

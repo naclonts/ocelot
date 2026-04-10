@@ -221,6 +221,9 @@ python3 train/train.py \
     --experiment ocelot-v0.1.0
 ```
 
+To enable training-only domain randomization, add `--domain_randomization` and
+tune the per-transform probabilities and strengths in `train/train.py`.
+
 ##### Track-only train
 
 Train on single-face tracking episodes only (`label_key=track`), filtering out

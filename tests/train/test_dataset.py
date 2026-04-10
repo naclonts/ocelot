@@ -137,6 +137,27 @@ class TestOcelotDataset:
         assert train_paths.isdisjoint(val_paths), \
             f"Train/val overlap: {train_paths & val_paths}"
 
+    def test_augment_applied_before_normalisation(self, tmp_path):
+        """Augment should see [0, 1] pixels and run before ImageNet normalisation."""
+        seen = {}
+
+        def augment(frame: torch.Tensor) -> torch.Tensor:
+            seen["min"] = float(frame.min().item())
+            seen["max"] = float(frame.max().item())
+            return frame + 0.5
+
+        ds = OcelotDataset("train", _make_fixture(tmp_path), augment=augment)
+        sample = ds[0]
+
+        assert 0.0 <= seen["min"] <= 1.0
+        assert 0.0 <= seen["max"] <= 1.0
+        expected_r = (0.5 - IMAGENET_MEAN[0]) / IMAGENET_STD[0]
+        np.testing.assert_allclose(sample["frame"][0, 0, 0].item(), expected_r, atol=1e-5)
+
+    def test_augment_rejected_for_val_split(self, tmp_path):
+        with pytest.raises(ValueError, match="train split"):
+            OcelotDataset("val", _make_fixture(tmp_path), augment=lambda x: x)
+
     def test_invalid_split_raises(self, tmp_path):
         with pytest.raises(ValueError, match="split must be"):
             OcelotDataset("bogus", _make_fixture(tmp_path))

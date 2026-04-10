@@ -52,6 +52,8 @@ class OcelotDataset(Dataset):
         split:       "train", "val", or "test"
         dataset_dir: path to the parent directory containing shard_* subdirs
                      (or a single shard directory with train/val/test.txt)
+        augment:     optional callable applied to the (3,224,224) float32
+                     tensor *before* ImageNet normalisation (train only)
         transform:   optional callable applied to the (3,224,224) float32
                      tensor *after* ImageNet normalisation
     """
@@ -61,6 +63,8 @@ class OcelotDataset(Dataset):
         split: str,
         dataset_dir: Path,
         transform=None,
+        *,
+        augment=None,
         max_episodes: int | None = None,
         shards: list[int] | None = None,
         label_keys: list[str] | None = None,
@@ -70,7 +74,11 @@ class OcelotDataset(Dataset):
 
         dataset_dir = Path(dataset_dir)
         self.split = split
+        self.augment = augment
         self.transform = transform
+
+        if self.augment is not None and split != "train":
+            raise ValueError("augment is only supported for the train split")
 
         # Build flat index: list of (h5_path, frame_idx)
         self._index: list[tuple[Path, int]] = []
@@ -160,10 +168,16 @@ class OcelotDataset(Dataset):
             label_key = raw_lk.decode("utf-8") if isinstance(raw_lk, bytes) \
                         else str(raw_lk)
 
-        # Normalise and convert to (3,224,224) float32 tensor
-        frame_f32 = frame_hwc.astype(np.float32) / 255.0       # (H,W,3) in [0,1]
-        frame_f32 = (frame_f32 - IMAGENET_MEAN) / IMAGENET_STD  # ImageNet normalise
-        frame_t   = torch.from_numpy(frame_f32.transpose(2, 0, 1))  # CHW
+        # Convert to (3,224,224) float32 tensor in [0, 1]
+        frame_f32 = frame_hwc.astype(np.float32) / 255.0
+        frame_t = torch.from_numpy(frame_f32.transpose(2, 0, 1))  # CHW
+
+        if self.augment is not None:
+            frame_t = self.augment(frame_t)
+
+        mean = torch.as_tensor(IMAGENET_MEAN, dtype=frame_t.dtype, device=frame_t.device).view(3, 1, 1)
+        std = torch.as_tensor(IMAGENET_STD, dtype=frame_t.dtype, device=frame_t.device).view(3, 1, 1)
+        frame_t = (frame_t - mean) / std  # ImageNet normalise
 
         if self.transform is not None:
             frame_t = self.transform(frame_t)
