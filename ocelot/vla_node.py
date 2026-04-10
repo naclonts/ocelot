@@ -25,6 +25,10 @@ Parameters
     Maximum velocity change per frame in rad/s² (assumes 10 Hz camera).
     Limits how quickly the commanded velocity can ramp up or down.
     Default: 0.0 (disabled).  Set > 0 to enable (e.g. 1.5).
+~deadband : float
+    Snap model output to 0.0 when |vel| < deadband (rad/s).  Default: 0.03.
+    Addresses the model's inability to output exact zeros near the oracle
+    deadband region (~20% of training labels are exactly 0.0).
 ~enabled : bool
     Publish /cmd_vel only when True.  Default: True.  Set False to pause without
     stopping the node (e.g. ros2 param set /vla_node enabled false).
@@ -96,6 +100,7 @@ class VLANode(Node):
         self.declare_parameter("command",     "track the face")
         self.declare_parameter("max_vel",     0.3)
         self.declare_parameter("max_accel",   0.0)
+        self.declare_parameter("deadband",    0.03)
         self.declare_parameter("enabled",     True)
 
         checkpoint_str = self.get_parameter("checkpoint").value
@@ -187,8 +192,18 @@ class VLANode(Node):
         )[0]  # (1, 2)
 
         max_vel = float(self.get_parameter("max_vel").value)
-        pan_vel  = float(np.clip(actions[0, 0], -max_vel, max_vel))
-        tilt_vel = float(np.clip(actions[0, 1], -max_vel, max_vel))
+        deadband = float(self.get_parameter("deadband").value)
+
+        pan_vel  = float(actions[0, 0])
+        tilt_vel = float(actions[0, 1])
+
+        if abs(pan_vel) < deadband:
+            pan_vel = 0.0
+        if abs(tilt_vel) < deadband:
+            tilt_vel = 0.0
+
+        pan_vel  = float(np.clip(pan_vel, -max_vel, max_vel))
+        tilt_vel = float(np.clip(tilt_vel, -max_vel, max_vel))
 
         # Rate-limit: cap how fast velocity can change per frame.
         # At 10 Hz camera, max_delta = max_accel / 10.
