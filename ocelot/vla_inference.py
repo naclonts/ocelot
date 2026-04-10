@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+import ctypes
 import json
+import os
 import time
 from pathlib import Path
 
@@ -12,6 +14,56 @@ import numpy as np
 # ImageNet normalisation — must match train/dataset.py
 _IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
 _IMAGENET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+
+
+def _preload_cuda_runtime_libs() -> None:
+    """Load CUDA/cuDNN libs from common local locations before importing ONNX Runtime."""
+    repo_root = Path(__file__).resolve().parents[1]
+    search_roots: list[Path] = [
+        Path(root) for root in os.environ.get("LD_LIBRARY_PATH", "").split(":") if root
+    ]
+
+    venv_nvidia_root = repo_root / ".venv" / "lib" / "python3.11" / "site-packages" / "nvidia"
+    if venv_nvidia_root.exists():
+        search_roots.extend(sorted(venv_nvidia_root.glob("*/lib")))
+
+    search_roots.extend(
+        path
+        for path in (
+            Path("/usr/local/cuda/lib64"),
+            Path("/usr/local/cuda-13.1/targets/x86_64-linux/lib"),
+            Path("/usr/local/lib/ollama"),
+        )
+        if path.exists()
+    )
+
+    required_libs = (
+        "libcudart.so.12",
+        "libnvrtc.so.12",
+        "libcublas.so.12",
+        "libcublasLt.so.12",
+        "libcurand.so.10",
+        "libcufft.so.11",
+        "libcufftw.so.11",
+        "libcudnn.so.9",
+        "libcudnn_ops.so.9",
+        "libcudnn_cnn.so.9",
+        "libcudnn_adv.so.9",
+        "libcudnn_graph.so.9",
+        "libcudnn_heuristic.so.9",
+        "libcudnn_engines_runtime_compiled.so.9",
+        "libcudnn_engines_precompiled.so.9",
+    )
+
+    seen: set[Path] = set()
+    for lib_name in required_libs:
+        for root in search_roots:
+            candidate = root / lib_name
+            if not candidate.exists() or candidate in seen:
+                continue
+            ctypes.CDLL(str(candidate), mode=os.RTLD_GLOBAL)
+            seen.add(candidate)
+            break
 
 
 def preprocess_bgr(bgr: np.ndarray) -> np.ndarray:
@@ -56,6 +108,7 @@ class VLAInferenceEngine:
         token_cache: str | Path | None = None,
         providers: list[str] | None = None,
     ) -> None:
+        _preload_cuda_runtime_libs()
         import onnxruntime as ort
 
         self.checkpoint = Path(checkpoint)
