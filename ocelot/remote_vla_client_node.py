@@ -23,7 +23,7 @@ class RemoteVLAClientNode(Node):
         self.declare_parameter("server_url", "http://127.0.0.1:8765/infer")
         self.declare_parameter("command", "track the face")
         self.declare_parameter("jpeg_quality", 85)
-        self.declare_parameter("request_timeout_sec", 0.2)
+        self.declare_parameter("request_timeout_sec", 1.0)
         self.declare_parameter("max_vel", 0.3)
         self.declare_parameter("deadband", 0.03)
         self.declare_parameter("enabled", True)

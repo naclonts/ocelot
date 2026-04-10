@@ -13,6 +13,7 @@ Tests cover:
 
 from __future__ import annotations
 
+import builtins
 import json
 import sys
 import unittest.mock as mock
@@ -266,6 +267,35 @@ class TestBuildTokenizeFn:
         assert first is second
         assert calls == {"loads": 1, "tokenizes": 1}
 
+    def test_uncached_command_falls_back_to_clip_tokenizer(self, tmp_path, monkeypatch):
+        calls = {"loads": 0, "tokenizes": 0}
+
+        class _Tokenizer:
+            def __call__(self, text, return_tensors, padding, truncation, max_length):
+                calls["tokenizes"] += 1
+                return {
+                    "input_ids": np.full((1, 77), 4, dtype=np.int64),
+                    "attention_mask": np.ones((1, 77), dtype=np.int64),
+                }
+
+        class _TokenizerClass:
+            @staticmethod
+            def from_pretrained(model_id):
+                calls["loads"] += 1
+                return _Tokenizer()
+
+        transformers_mod = mock.MagicMock()
+        del transformers_mod.CLIPTokenizerFast
+        transformers_mod.CLIPTokenizer = _TokenizerClass
+        monkeypatch.setitem(sys.modules, "transformers", transformers_mod)
+
+        tokenize = build_tokenize_fn(_make_token_cache(tmp_path))
+        ids, mask = tokenize("fallback tokenizer command")
+
+        assert ids.shape == (1, 77)
+        assert mask.shape == (1, 77)
+        assert calls == {"loads": 1, "tokenizes": 1}
+
     def test_uncached_command_without_transformers_raises(self, tmp_path, monkeypatch):
         tokenize = build_tokenize_fn(_make_token_cache(tmp_path))
 
@@ -281,6 +311,51 @@ class TestBuildTokenizeFn:
 
         with pytest.raises(RuntimeError, match="transformers is required"):
             tokenize("arbitrary uncached command")
+
+    def test_uncached_command_uses_direct_clip_import_fallback(self, tmp_path, monkeypatch):
+        calls = {"loads": 0, "tokenizes": 0}
+        real_import = builtins.__import__
+
+        class _Tokenizer:
+            def __call__(self, text, return_tensors, padding, truncation, max_length):
+                calls["tokenizes"] += 1
+                return {
+                    "input_ids": np.full((1, 77), 8, dtype=np.int64),
+                    "attention_mask": np.ones((1, 77), dtype=np.int64),
+                }
+
+        class _TokenizerClass:
+            @staticmethod
+            def from_pretrained(model_id):
+                calls["loads"] += 1
+                return _Tokenizer()
+
+        class _TransformersModule:
+            pass
+
+        transformers_mod = _TransformersModule()
+        monkeypatch.setitem(sys.modules, "transformers", transformers_mod)
+
+        class _ClipModule:
+            CLIPTokenizer = _TokenizerClass
+
+        clip_mod = _ClipModule()
+        monkeypatch.setitem(sys.modules, "transformers.models", _TransformersModule())
+        monkeypatch.setitem(sys.modules, "transformers.models.clip", clip_mod)
+
+        def _fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+            if name == "transformers.models.clip":
+                return clip_mod
+            return real_import(name, globals, locals, fromlist, level)
+
+        monkeypatch.setattr("builtins.__import__", _fake_import)
+
+        tokenize = build_tokenize_fn(_make_token_cache(tmp_path))
+        ids, mask = tokenize("direct clip import fallback")
+
+        assert ids.shape == (1, 77)
+        assert mask.shape == (1, 77)
+        assert calls == {"loads": 1, "tokenizes": 1}
 
 
 # ---------------------------------------------------------------------------

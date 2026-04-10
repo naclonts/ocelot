@@ -32,6 +32,13 @@ USE_HAAR=true docker compose up            # classical Haar cascade tracker
 VLA_COMMAND="look at the person" docker compose up
 USE_REMOTE_VLA=true REMOTE_VLA_URL=http://<workstation-ip>:8765/infer docker compose up
 ROS_LOCALHOST_ONLY=1 docker compose up    # optional: keep ROS graph private to the Pi
+
+# Change the active language command at runtime
+ros2 param set /vla_node command "look at the person"
+ros2 param set /remote_vla_client_node command "look at the person"
+
+# Remote mode only: increase HTTP timeout if the first uncached command stalls
+ros2 param set /remote_vla_client_node request_timeout_sec 1.0
 ```
 
 `docker compose up` loads `models/active.onnx` — a symlink to the currently active INT8 model.

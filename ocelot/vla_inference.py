@@ -108,12 +108,25 @@ def build_tokenize_fn(
     def _get_tokenizer():
         if tokenizer_holder[0] is None:
             try:
-                from transformers import CLIPTokenizerFast
+                import transformers
             except ImportError as exc:
                 raise RuntimeError(
                     "transformers is required to tokenize uncached commands at runtime."
                 ) from exc
-            tokenizer_holder[0] = CLIPTokenizerFast.from_pretrained(_CLIP_ID)
+            tokenizer_cls = getattr(transformers, "CLIPTokenizerFast", None)
+            if tokenizer_cls is None:
+                tokenizer_cls = getattr(transformers, "CLIPTokenizer", None)
+            if tokenizer_cls is None:
+                try:
+                    from transformers.models.clip import CLIPTokenizerFast as tokenizer_cls
+                except ImportError:
+                    try:
+                        from transformers.models.clip import CLIPTokenizer as tokenizer_cls
+                    except ImportError as exc:
+                        raise RuntimeError(
+                            "transformers is installed but does not expose a CLIP tokenizer."
+                        ) from exc
+            tokenizer_holder[0] = tokenizer_cls.from_pretrained(_CLIP_ID)
         return tokenizer_holder[0]
 
     def tokenize(command: str) -> tuple[np.ndarray, np.ndarray]:

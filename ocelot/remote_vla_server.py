@@ -28,7 +28,10 @@ def _build_handler(
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
-            self.wfile.write(body)
+            try:
+                self.wfile.write(body)
+            except (BrokenPipeError, ConnectionResetError):
+                return
 
         def do_GET(self) -> None:
             parsed = urlparse(self.path)
