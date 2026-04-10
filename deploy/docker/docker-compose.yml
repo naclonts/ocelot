@@ -77,6 +77,7 @@ services:
       - USE_HAAR=${USE_HAAR:-false}
       - VLA_COMMAND=${VLA_COMMAND:-track the face}
       - VLA_CHECKPOINT=${VLA_CHECKPOINT:-/ws/src/ocelot/models/active.onnx}
+      - VLA_DEADBAND=${VLA_DEADBAND:-0.03}
       - OCELOT_ROOT=/ws/src/ocelot
     command: >
       bash -c "source /opt/ros/jazzy/setup.bash &&
@@ -92,7 +93,8 @@ services:
       visualize:=${VISUALIZE:-false}
       use_haar:=${USE_HAAR:-false}
       vla_checkpoint:=${VLA_CHECKPOINT:-/ws/src/ocelot/models/active.onnx}
-      \"vla_command:=${VLA_COMMAND:-track the face}\""
+      \"vla_command:=${VLA_COMMAND:-track the face}\"
+      vla_deadband:=${VLA_DEADBAND:-0.03}"
     stdin_open: true
     tty: true
 

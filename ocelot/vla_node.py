@@ -197,9 +197,15 @@ class VLANode(Node):
         pan_vel  = float(actions[0, 0])
         tilt_vel = float(actions[0, 1])
 
-        if abs(pan_vel) < deadband:
+        pan_in_db  = abs(pan_vel)  < deadband
+        tilt_in_db = abs(tilt_vel) < deadband
+        if pan_in_db and tilt_in_db:
+            self.get_logger().info(
+                f"[t{self._tick + 1}] IN DEADBAND  raw=({pan_vel:+.4f},{tilt_vel:+.4f}) db=±{deadband:.3f}"
+            )
+        if pan_in_db:
             pan_vel = 0.0
-        if abs(tilt_vel) < deadband:
+        if tilt_in_db:
             tilt_vel = 0.0
 
         pan_vel  = float(np.clip(pan_vel, -max_vel, max_vel))

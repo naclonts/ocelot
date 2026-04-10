@@ -120,10 +120,16 @@ class TrackerNode(Node):
         norm_y = error_y / (h / 2)
 
         twist = Twist()
-        if abs(error_x) > deadband:
+        in_deadband_x = abs(error_x) <= deadband
+        in_deadband_y = abs(error_y) <= deadband
+        if not in_deadband_x:
             twist.angular.z = float(np.clip(kp_pan * norm_x, -max_vel, max_vel))
-        if abs(error_y) > deadband:
+        if not in_deadband_y:
             twist.angular.y = float(np.clip(kp_tilt * norm_y, -max_vel, max_vel))
+        if in_deadband_x and in_deadband_y:
+            self.get_logger().info(
+                f'in deadband: err=({error_x:+d},{error_y:+d}) deadband=±{deadband}px'
+            )
 
         roi = RegionOfInterest()
         roi.x_offset = int(x)

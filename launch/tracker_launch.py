@@ -39,6 +39,11 @@ def generate_launch_description():
             default_value='track the face',
             description='Language command passed to the VLA node.',
         ),
+        DeclareLaunchArgument(
+            'vla_deadband',
+            default_value='0.03',
+            description='Deadband threshold (rad/s) — model outputs below this are zeroed.',
+        ),
 
         Node(
             package='ocelot',
@@ -67,6 +72,7 @@ def generate_launch_description():
                 'checkpoint':  LaunchConfiguration('vla_checkpoint'),
                 'token_cache': '/ws/src/ocelot/models/active_tokens.json',
                 'command':     LaunchConfiguration('vla_command'),
+                'deadband':    LaunchConfiguration('vla_deadband'),
                 'enabled':     True,
             }],
             condition=UnlessCondition(LaunchConfiguration('use_haar')),
