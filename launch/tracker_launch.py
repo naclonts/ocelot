@@ -25,9 +25,9 @@ def generate_launch_description():
             description='Run visualizer_node → /camera/image_annotated',
         ),
         DeclareLaunchArgument(
-            'use_vla',
+            'use_haar',
             default_value='false',
-            description='Use VLA model instead of classical tracker.',
+            description='Use classical Haar cascade tracker instead of VLA model.',
         ),
         DeclareLaunchArgument(
             'vla_checkpoint',
@@ -57,7 +57,7 @@ def generate_launch_description():
             executable='tracker_node',
             name='tracker_node',
             parameters=[params],
-            condition=UnlessCondition(LaunchConfiguration('use_vla')),
+            condition=IfCondition(LaunchConfiguration('use_haar')),
         ),
         Node(
             package='ocelot',
@@ -69,7 +69,7 @@ def generate_launch_description():
                 'command':     LaunchConfiguration('vla_command'),
                 'enabled':     True,
             }],
-            condition=IfCondition(LaunchConfiguration('use_vla')),
+            condition=UnlessCondition(LaunchConfiguration('use_haar')),
         ),
         Node(
             package='web_video_server',

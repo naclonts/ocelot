@@ -74,7 +74,7 @@ services:
       - ROS_LOCALHOST_ONLY=1
       - RECORD=${RECORD:-false}
       - VISUALIZE=${VISUALIZE:-false}
-      - USE_VLA=${USE_VLA:-false}
+      - USE_HAAR=${USE_HAAR:-false}
       - VLA_COMMAND=${VLA_COMMAND:-track the face}
       - VLA_CHECKPOINT=${VLA_CHECKPOINT:-/ws/src/ocelot/models/active.onnx}
       - OCELOT_ROOT=/ws/src/ocelot
@@ -90,7 +90,7 @@ services:
       exec ros2 launch ocelot tracker_launch.py
       record:=${RECORD:-false}
       visualize:=${VISUALIZE:-false}
-      use_vla:=${USE_VLA:-false}
+      use_haar:=${USE_HAAR:-false}
       vla_checkpoint:=${VLA_CHECKPOINT:-/ws/src/ocelot/models/active.onnx}
       \"vla_command:=${VLA_COMMAND:-track the face}\""
     stdin_open: true
