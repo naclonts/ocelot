@@ -19,16 +19,11 @@ Pan-tilt face tracking robot (Raspberry Pi 5), plus a simulated environment for 
 # 1. Build Docker image
 docker compose build
 
-# 2. Launch — venv setup and ROS package build happen automatically on first run
+# 2. Launch
 docker compose up
 ```
 
-> **Why the venv?** `capture_worker.py` runs under the container's `python3.11` (deadsnakes)
-> so that picamera2/libcamera — compiled for Pi OS Bookworm's Python 3.11 — work correctly.
-> The venv is created automatically on first `docker compose up` and persists in the project
-> directory. See Troubleshooting if you need to force-recreate it.
-
-### Launch
+### Launch Options
 
 ```bash
 docker compose up                          # VLA model (INT8) — default
