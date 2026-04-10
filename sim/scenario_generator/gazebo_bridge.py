@@ -74,7 +74,7 @@ _FACE_SDF = """\
 <sdf version="1.10">
   <model name="{name}">
     <static>true</static>
-    <pose>{x} {y} {z} 0 0 0</pose>{pose_publisher_plugin}
+    <pose>{x} {y} {z} 0 {pitch} {yaw}</pose>{pose_publisher_plugin}
     <link name="link">
       <visual name="face_visual_{ep}">
         <cast_shadows>false</cast_shadows>
@@ -274,7 +274,14 @@ class GazeboBridge:
     # Public API
     # ------------------------------------------------------------------
 
-    def spawn_face(self, name: str, pos: tuple, texture_abs_path: str) -> bool:
+    def spawn_face(
+        self,
+        name: str,
+        pos: tuple,
+        texture_abs_path: str,
+        pitch: float = 0.0,
+        yaw: float = 0.0,
+    ) -> bool:
         """Spawn a face billboard with the given texture at pos=(x, y, z).
 
         All faces receive the PosePublisher plugin so oracle_node can subscribe
@@ -284,6 +291,7 @@ class GazeboBridge:
         sdf = _FACE_SDF.format(
             name=name,
             x=pos[0], y=pos[1], z=pos[2],
+            pitch=pitch, yaw=yaw,
             texture_abs_path=texture_abs_path,
             pose_publisher_plugin=_POSE_PUBLISHER_PLUGIN,
             ep=self._ep_id,
@@ -301,8 +309,16 @@ class GazeboBridge:
         # On failure keep the entry so the next teardown_episode() retries.
         return ok
 
-    def set_pose(self, name: str, x: float, y: float, z: float) -> bool:
-        """Set the absolute world position of a model.  Rotation stays at identity."""
+    def set_pose(
+        self,
+        name: str,
+        x: float,
+        y: float,
+        z: float,
+        pitch: float = 0.0,
+        yaw: float = 0.0,
+    ) -> bool:
+        """Set the absolute world pose of a model."""
         if not _GZ_AVAILABLE:
             return True
 
@@ -311,6 +327,10 @@ class GazeboBridge:
         req.position.x = x
         req.position.y = y
         req.position.z = z
+        req.orientation.x = 0.0
+        req.orientation.y = math.sin(pitch / 2.0) * math.cos(yaw / 2.0)
+        req.orientation.z = math.cos(pitch / 2.0) * math.sin(yaw / 2.0)
+        req.orientation.w = math.cos(pitch / 2.0) * math.cos(yaw / 2.0)
         result, _rep = _node.request(
             self._set_pose_srv, req, Pose, Boolean, _TIMEOUT_MS
         )
@@ -471,6 +491,8 @@ class GazeboBridge:
                     name=f"face_{i}",
                     pos=(face_cfg.initial_x, face_cfg.initial_y, face_cfg.initial_z),
                     texture_abs_path=face_cfg.texture_path,
+                    pitch=math.radians(getattr(face_cfg, "pitch_deg", 0.0)),
+                    yaw=math.radians(getattr(face_cfg, "yaw_deg", 0.0)),
                 )
         for i, dist_cfg in enumerate(config.distractors):
             self.spawn_distractor(

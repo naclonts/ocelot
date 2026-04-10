@@ -56,7 +56,8 @@ def _make_face_desc(face_id: str, hat=None, glasses=None, facial_hair=None,
 
 
 def _make_face_config(face_id="face_001", initial_x=2.0, initial_y=0.0,
-                      initial_z=1.0, motion="sinusoidal", speed=0.3,
+                      initial_z=1.0, yaw_deg=0.0, pitch_deg=0.0,
+                      motion="sinusoidal", speed=0.3,
                       period=10.0) -> FaceConfig:
     return FaceConfig(
         face_id=face_id,
@@ -64,6 +65,8 @@ def _make_face_config(face_id="face_001", initial_x=2.0, initial_y=0.0,
         initial_x=initial_x,
         initial_y=initial_y,
         initial_z=initial_z,
+        yaw_deg=yaw_deg,
+        pitch_deg=pitch_deg,
         motion=motion,
         speed=speed,
         period=period,
@@ -223,6 +226,8 @@ class TestBoundsAndDistributions:
                     f"initial_z={face.initial_z:.3f} outside FOV range "
                     f"[{z_lo:.3f}, {z_hi:.3f}] at x={face.initial_x:.2f}"
                 )
+                assert -20.0 <= face.yaw_deg <= 20.0
+                assert -12.0 <= face.pitch_deg <= 12.0
                 assert 0.05 <= face.speed <= 0.5
                 assert 6.0 <= face.period <= 20.0
                 assert face.motion in ("static", "linear_drift", "sinusoidal", "random_walk")
@@ -298,11 +303,32 @@ class TestJsonRoundTrip:
             for rf, of in zip(restored.faces, original.faces):
                 assert rf.face_id == of.face_id
                 assert abs(rf.initial_x - of.initial_x) < 1e-12
+                assert rf.yaw_deg == of.yaw_deg
+                assert rf.pitch_deg == of.pitch_deg
                 assert rf.motion == of.motion
             assert restored.ambient_rgb == original.ambient_rgb
             for rd, od in zip(restored.distractors, original.distractors):
                 assert rd.color_rgb == od.color_rgb
                 assert rd.shape == od.shape
+
+    def test_setup_episode_passes_face_orientation(self):
+        from unittest.mock import MagicMock
+        from sim.scenario_generator.gazebo_bridge import GazeboBridge
+
+        face = _make_face_config(yaw_deg=15.0, pitch_deg=-8.0)
+        bridge = GazeboBridge(world="test_world")
+        bridge.spawn_face = MagicMock(return_value=True)
+        bridge.spawn_background = MagicMock(return_value=True)
+        bridge.spawn_key_light = MagicMock(return_value=True)
+        bridge.spawn_fill_light = MagicMock(return_value=True)
+        bridge.teardown_episode = MagicMock()
+
+        config = _make_scenario_config([face], target_face_idx=0)
+        bridge.setup_episode(config)
+
+        call = bridge.spawn_face.call_args
+        assert call.kwargs["pitch"] == pytest.approx(-0.13962634015954636)
+        assert call.kwargs["yaw"] == pytest.approx(0.2617993877991494)
 
 
 # ---------------------------------------------------------------------------

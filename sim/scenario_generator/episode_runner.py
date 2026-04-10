@@ -22,6 +22,7 @@ in sync with the camera topic.
 """
 
 import logging
+import math
 import random
 
 from sim.scenario_generator.motion import make_motion, RandomWalkMotion
@@ -88,7 +89,7 @@ class EpisodeRunner:
             for i, face in enumerate(ordered_faces):
                 pattern = make_motion(face.motion, face.speed, face.period, rng)
                 pattern.reset(face.initial_x, face.initial_y, face.initial_z)
-                self._face_motions.append((f"face_{i}", pattern))
+                self._face_motions.append((f"face_{i}", pattern, face))
 
         # Distractors always use random walk (no motion field in DistractorConfig).
         self._distractor_motions = []
@@ -108,9 +109,16 @@ class EpisodeRunner:
             dict mapping entity name → (x, y, z) for every animated entity.
         """
         positions = {}
-        for name, pattern in self._face_motions:
+        for name, pattern, face in self._face_motions:
             x, y, z = pattern.step(t)
-            self._bridge.set_pose(name, x, y, z)
+            self._bridge.set_pose(
+                name,
+                x,
+                y,
+                z,
+                pitch=math.radians(getattr(face, "pitch_deg", 0.0)),
+                yaw=math.radians(getattr(face, "yaw_deg", 0.0)),
+            )
             positions[name] = (x, y, z)
         for name, pattern in self._distractor_motions:
             x, y, z = pattern.step(t)

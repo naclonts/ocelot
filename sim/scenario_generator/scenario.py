@@ -31,6 +31,8 @@ class FaceConfig:
     initial_x:    float  # distance in front of robot [2.0–4.0 m]
     initial_y:    float  # lateral offset [-1.0–1.0 m]
     initial_z:    float  # height — depth-dependent FOV range, floor 0.3 m
+    yaw_deg:      float  # face yaw relative to camera [−20°, +20°]
+    pitch_deg:    float  # face pitch relative to camera [−12°, +12°]
     motion:       str    # static | linear_drift | sinusoidal | random_walk
     speed:        float  # m/s [0.05–0.5] — peak velocity for all patterns
     period:       float  # seconds [6.0–20.0] — sinusoidal; ignored otherwise
@@ -73,7 +75,13 @@ class ScenarioConfig:
     @classmethod
     def from_dict(cls, d: dict) -> "ScenarioConfig":
         d = dict(d)
-        d["faces"] = [FaceConfig(**f) for f in d["faces"]]
+        faces = []
+        for face in d["faces"]:
+            face = dict(face)
+            face.setdefault("yaw_deg", 0.0)
+            face.setdefault("pitch_deg", 0.0)
+            faces.append(FaceConfig(**face))
+        d["faces"] = faces
         d["distractors"] = [
             DistractorConfig(
                 shape=dist["shape"],
@@ -108,6 +116,8 @@ class ScenarioGenerator:
     # weights=[9,7,7,7] → 9/30 = 30% static.
     _MOTION_TYPES = ["static", "linear_drift", "sinusoidal", "random_walk"]
     _MOTION_WEIGHTS = [9, 7, 7, 7]
+    _MAX_FACE_YAW_DEG = 20.0
+    _MAX_FACE_PITCH_DEG = 12.0
 
     def __init__(self, faces_dir: Path, backgrounds_dir: Path):
         faces_dir = Path(faces_dir)
@@ -222,6 +232,8 @@ class ScenarioGenerator:
                 initial_x=face_x,
                 initial_y=face_y,
                 initial_z=face_z,
+                yaw_deg=rng.uniform(-self._MAX_FACE_YAW_DEG, self._MAX_FACE_YAW_DEG),
+                pitch_deg=rng.uniform(-self._MAX_FACE_PITCH_DEG, self._MAX_FACE_PITCH_DEG),
                 motion=rng.choices(
                     self._MOTION_TYPES, weights=self._MOTION_WEIGHTS, k=1
                 )[0],
@@ -301,6 +313,8 @@ class ScenarioGenerator:
             initial_x=face_x,
             initial_y=0.0,
             initial_z=face_z,
+            yaw_deg=rng.uniform(-self._MAX_FACE_YAW_DEG, self._MAX_FACE_YAW_DEG),
+            pitch_deg=rng.uniform(-self._MAX_FACE_PITCH_DEG, self._MAX_FACE_PITCH_DEG),
             motion="static",
             speed=0.0,
             period=rng.uniform(6.0, 20.0),
