@@ -164,9 +164,21 @@ class VLAInferenceEngine:
 
         self.checkpoint = Path(checkpoint)
         if token_cache is None:
-            self.token_cache_path = self.checkpoint.with_name(
+            default_cache = self.checkpoint.with_name(
                 self.checkpoint.stem + "_tokens.json"
             )
+            fallback_cache = None
+            if self.checkpoint.stem.endswith("_int8"):
+                fallback_cache = self.checkpoint.with_name(
+                    self.checkpoint.stem.removesuffix("_int8") + "_tokens.json"
+                )
+
+            if default_cache.exists():
+                self.token_cache_path = default_cache
+            elif fallback_cache is not None and fallback_cache.exists():
+                self.token_cache_path = fallback_cache
+            else:
+                self.token_cache_path = default_cache
         else:
             self.token_cache_path = Path(token_cache)
 

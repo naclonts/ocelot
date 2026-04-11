@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """sim/preview_episode.py — record one episode to mp4 with live annotation overlay.
 
-Runs a single scenario episode driven by the oracle and saves /camera/image_annotated
-frames (crosshair, cmd_vel) plus a projected face-position dot to an mp4 file.
+Runs a single scenario episode and saves /camera/image_raw frames with an
+in-process overlay (crosshair, cmd_vel, projected face-position dot) to an mp4
+file. The overlay is rendered here rather than reusing /camera/image_annotated
+so preview video is not distorted by asynchronous visualizer timing.
 
 Default: seed=280  (sinusoidal, outdoor_forest, n_faces=1, no perturbation)
 
@@ -25,7 +27,7 @@ import cv2
 import numpy as np
 import rclpy
 from cv_bridge import CvBridge
-from geometry_msgs.msg import Pose
+from geometry_msgs.msg import Pose, Twist
 from rcl_interfaces.msg import Parameter as RclParameter, ParameterType, ParameterValue
 from rcl_interfaces.srv import SetParameters
 from rclpy.node import Node
@@ -65,6 +67,8 @@ _CAM_Z  = 0.01
 # Annotation colours (BGR)
 _CYAN   = (255, 200, 0)
 _RED    = (0, 60, 220)
+_GREY   = (180, 180, 180)
+_YELLOW = (80, 230, 255)
 _WHITE  = (255, 255, 255)
 
 _ORACLE_LABEL_MAP = {
@@ -108,18 +112,39 @@ def _project_face(face_pos: np.ndarray, pan: float, tilt: float) -> "tuple[int, 
     return u, v
 
 
-def _annotate_face(frame: np.ndarray, face_pos: "np.ndarray | None",
-                   pan: float, tilt: float) -> np.ndarray:
-    """Overlay projected face position dot + error vector onto frame (in-place)."""
+def _annotate_frame(
+    frame: np.ndarray,
+    face_pos: "np.ndarray | None",
+    pan: float,
+    tilt: float,
+    cmd: Twist,
+    episode_cmd: str,
+) -> np.ndarray:
+    """Overlay crosshair, cmd_vel text, and projected face pose onto frame."""
+    h, w = frame.shape[:2]
+    cx, cy = w // 2, h // 2
+
+    overlay = frame.copy()
+    cv2.circle(overlay, (cx, cy), 30, _WHITE, 1, cv2.LINE_AA)
+    cv2.addWeighted(overlay, 0.25, frame, 0.75, 0, frame)
+
+    arm = 14
+    cv2.line(frame, (cx - arm, cy), (cx + arm, cy), _GREY, 1, cv2.LINE_AA)
+    cv2.line(frame, (cx, cy - arm), (cx, cy + arm), _GREY, 1, cv2.LINE_AA)
+    cv2.putText(frame, f"pan  {cmd.angular.z:+.2f}",
+                (8, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, _YELLOW, 1, cv2.LINE_AA)
+    cv2.putText(frame, f"tilt {cmd.angular.y:+.2f}",
+                (8, 42), cv2.FONT_HERSHEY_SIMPLEX, 0.5, _YELLOW, 1, cv2.LINE_AA)
+    if episode_cmd:
+        cv2.putText(frame, episode_cmd,
+                    (8, h - 12), cv2.FONT_HERSHEY_SIMPLEX, 0.45, _WHITE, 1, cv2.LINE_AA)
+
     if face_pos is None:
         return frame
     uv = _project_face(face_pos, pan, tilt)
     if uv is None:
         return frame
     u, v = uv
-    h, w = frame.shape[:2]
-    cx, cy = w // 2, h // 2
-
     # error vector: center → projected face
     cv2.arrowedLine(frame, (cx, cy), (u, v), _RED, 2, cv2.LINE_AA, tipLength=0.15)
     # face projection dot
@@ -135,12 +160,14 @@ class PreviewNode(Node):
         self._bridge = CvBridge()
         self._lock   = threading.Lock()
 
-        self._latest_annotated: np.ndarray | None = None
+        self._latest_raw: np.ndarray | None       = None
         self._face_pos: np.ndarray | None          = None
         self._pan: float  = 0.0
         self._tilt: float = 0.0
+        self._latest_cmd = Twist()
+        self._latest_episode_cmd = ""
 
-        self._annotated_event  = threading.Event()
+        self._frame_event      = threading.Event()
         self._joints_received  = threading.Event()
 
         self._cmd_pub = self.create_publisher(String, "/episode/cmd", 1)
@@ -149,15 +176,16 @@ class PreviewNode(Node):
         )
         self._oracle_ready = False
 
-        self.create_subscription(Image,     "/camera/image_annotated", self._on_annotated, 10)
-        self.create_subscription(JointState, "/joint_states",           self._on_joints, 10)
-        self.create_subscription(Pose,       "/model/face_0/pose",      self._on_face, 10)
+        self.create_subscription(Image,      "/camera/image_raw", self._on_image, 10)
+        self.create_subscription(JointState, "/joint_states",     self._on_joints, 10)
+        self.create_subscription(Pose,       "/model/face_0/pose", self._on_face, 10)
+        self.create_subscription(Twist,      "/cmd_vel",           self._on_cmd_vel, 10)
 
-    def _on_annotated(self, msg: Image) -> None:
+    def _on_image(self, msg: Image) -> None:
         frame = self._bridge.imgmsg_to_cv2(msg, "bgr8")
         with self._lock:
-            self._latest_annotated = frame
-        self._annotated_event.set()
+            self._latest_raw = frame
+        self._frame_event.set()
 
     def _on_joints(self, msg: JointState) -> None:
         with self._lock:
@@ -174,27 +202,34 @@ class PreviewNode(Node):
                 [msg.position.x, msg.position.y, msg.position.z]
             )
 
+    def _on_cmd_vel(self, msg: Twist) -> None:
+        with self._lock:
+            self._latest_cmd = msg
+
     def wait_ready(self, timeout: float = 90.0) -> bool:
         return self._joints_received.wait(timeout=timeout)
 
     def wait_for_frame(self, timeout: float = 5.0) -> bool:
-        self._annotated_event.clear()
-        return self._annotated_event.wait(timeout=timeout)
+        self._frame_event.clear()
+        return self._frame_event.wait(timeout=timeout)
 
     def get_frame_with_face(self) -> "np.ndarray | None":
-        """Return annotated frame with projected face overlay applied."""
+        """Return a raw frame with a local overlay based on latest control/state."""
         with self._lock:
-            base = self._latest_annotated
-            pos  = self._face_pos.copy() if self._face_pos is not None else None
+            base = None if self._latest_raw is None else self._latest_raw.copy()
+            pos = self._face_pos.copy() if self._face_pos is not None else None
             pan, tilt = self._pan, self._tilt
+            cmd = self._latest_cmd
+            episode_cmd = self._latest_episode_cmd
         if base is None:
             return None
-        frame = base.copy()
-        return _annotate_face(frame, pos, pan, tilt)
+        return _annotate_frame(base, pos, pan, tilt, cmd, episode_cmd)
 
     def publish_cmd(self, text: str) -> None:
         msg = String()
         msg.data = text
+        with self._lock:
+            self._latest_episode_cmd = text
         self._cmd_pub.publish(msg)
 
     def configure_oracle(self, label_key: str, num_faces: int,
@@ -240,6 +275,14 @@ def main() -> None:
     p.add_argument("--out", default="/ws/src/ocelot/preview.mp4",
                    help="Output mp4 path. Default: /ws/src/ocelot/preview.mp4")
     p.add_argument(
+        "--skip-oracle-config",
+        action="store_true",
+        help=(
+            "Skip /oracle_node parameter configuration. "
+            "Use this when sim_launch.py is running with use_vla:=true."
+        ),
+    )
+    p.add_argument(
         "--faces-dir",
         default=str(Path(__file__).resolve().parent / "scenario_generator"),
     )
@@ -275,7 +318,10 @@ def main() -> None:
         config.faces[0].motion if config.faces else "?", config.label_key,
     )
 
-    node.configure_oracle(config.label_key, len(config.faces))
+    if args.skip_oracle_config:
+        log.info("Skipping oracle parameter config (--skip-oracle-config).")
+    else:
+        node.configure_oracle(config.label_key, len(config.faces))
     runner.setup(config)
     node.publish_cmd(config.language_label)
 
