@@ -1,6 +1,8 @@
 # Ocelot
 
-Pan-tilt face tracking robot (Raspberry Pi 5), plus a simulated environment for training. Classical CV baseline with Haar cascade for now; VLA model coming soon.
+Pan-tilt face tracking robot (Raspberry Pi 5), plus a simulated environment for training.
+
+Uses a VLA trained on top of frozen DINOv2 and CLIP model embeddings, which can follow language commands like "look at the person in the hat" or "look at the person on the right."
 
 ## Hardware
 | Component | Detail |
@@ -626,11 +628,9 @@ To switch to GPU-accelerated rendering (NVIDIA), use the GPU compose overlay as 
 
 ---
 
-## Phase Roadmap
-| Phase | Weeks | Goal |
-|---|---|---|
-| 1 | 1–4 | Classical face tracker (Haar cascade) — **complete** |
-| 2 | 5–8 | Gazebo sim + synthetic data engine — **complete** |
-| 3 | 9–13 | VLA model (DINOv2 + CLIP + action head) — **complete** |
-| 4 | 14–18 | Edge deployment + MLOps loop — **current** |
-| 5 | 19–20 | Polish + portfolio |
+## Further Reading
+
+A couple articles about debugging issues in the project:
+
+- https://nathanclonts.com/we-only-learn-from-error/
+- https://nathanclonts.com/robot-logs-0/
