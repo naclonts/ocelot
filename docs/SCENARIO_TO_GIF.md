@@ -1,11 +1,14 @@
 # Scenario -> Video -> GIF Runbook
 
-This runbook shows how to capture an oracle-driven sim scenario and convert it
-into a web-friendly GIF.
+This runbook shows how to capture a sim scenario to MP4 and convert it into a
+web-friendly GIF. The recording step works for both oracle-driven and VLA-driven
+runs.
 
 ## 1) Record a scenario to MP4
 
 From repo root:
+
+Oracle example:
 
 ```bash
 docker compose -f deploy/docker/docker-compose.sim.yml run --rm sim bash -lc '
@@ -16,6 +19,28 @@ docker compose -f deploy/docker/docker-compose.sim.yml run --rm sim bash -lc '
   ros2 launch ocelot sim_launch.py world:=scenario_world use_oracle:=true headless:=true & \
   sleep 15 && \
   python3 /ws/src/ocelot/sim/preview_episode.py --seed 280 --out /ws/src/ocelot/sim/oracle-single-face-raw.mp4
+'
+```
+
+VLA example:
+
+```bash
+docker compose -f deploy/docker/docker-compose.sim.yml run --rm sim bash -lc '
+  source /opt/ros/jazzy/setup.bash && \
+  cd /ws && \
+  colcon build --symlink-install --packages-select ocelot --event-handlers console_direct- && \
+  source /ws/install/setup.bash && \
+  ros2 launch ocelot sim_launch.py \
+    world:=scenario_world \
+    use_vla:=true \
+    headless:=true \
+    vla_checkpoint:=/ws/src/ocelot/runs/v0.0.3-1500-ep-perturbed/best.onnx \
+    vla_command:="track the face" & \
+  sleep 15 && \
+  python3 /ws/src/ocelot/sim/preview_episode.py \
+    --seed 102 \
+    --skip-oracle-config \
+    --out /ws/src/ocelot/sim/v0.0.3-seed102-single.mp4
 '
 ```
 

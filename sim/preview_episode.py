@@ -64,6 +64,13 @@ _TILT_Z = 0.03
 _CAM_X  = 0.02
 _CAM_Z  = 0.01
 
+# Match sim/data_gen/collect_data.py so preview clips can mirror the
+# perturbation cadence used during training-data collection.
+PERTURB_DURATION = 8
+_PERTURB_FOV_H = math.radians(25)
+_PERTURB_FOV_V = math.radians(20)
+_WORLD_CAM_Z = 0.07
+
 # Annotation colours (BGR)
 _CYAN   = (255, 200, 0)
 _RED    = (0, 60, 220)
@@ -79,6 +86,52 @@ _ORACLE_LABEL_MAP = {
     "centered":    "track",
     "no_face":     "track",
 }
+
+
+class PerturbController:
+    """Inject periodic angular perturbations into face_0 like training collection."""
+
+    def __init__(self, interval: int, range_rad: float, seed: int,
+                 duration: int = PERTURB_DURATION):
+        self.interval = interval
+        self.range_rad = range_rad
+        self.duration = duration
+        self._rng = np.random.default_rng(seed ^ 0xBEEF)
+        self._y_offset = 0.0
+        self._z_offset = 0.0
+        self._frames_left = 0
+        self._next_trigger = interval
+
+    def step(self, frame_idx: int, positions: dict, set_pose_fn) -> bool:
+        if self.interval <= 0:
+            return False
+
+        if frame_idx == self._next_trigger:
+            face_pos = positions.get("face_0")
+            if face_pos is not None:
+                delta_pan = self._rng.uniform(-self.range_rad, self.range_rad)
+                delta_tilt = self._rng.uniform(-self.range_rad, self.range_rad)
+                face_x = max(face_pos[0], 0.5)
+                self._y_offset = face_x * np.tan(delta_pan)
+                self._z_offset = face_x * np.tan(delta_tilt)
+                self._frames_left = self.duration
+                self._next_trigger = frame_idx + self.interval
+
+        if self._frames_left > 0:
+            face_pos = positions.get("face_0")
+            if face_pos is not None:
+                face_x = max(face_pos[0], 0.5)
+                new_y = face_pos[1] + self._y_offset
+                new_z = face_pos[2] + self._z_offset
+                y_lim = face_x * np.tan(_PERTURB_FOV_H)
+                new_y = float(np.clip(new_y, -y_lim, y_lim))
+                dz = face_x * np.tan(_PERTURB_FOV_V)
+                new_z = float(np.clip(new_z, max(0.1, _WORLD_CAM_Z - dz), _WORLD_CAM_Z + dz))
+                set_pose_fn("face_0", face_pos[0], new_y, new_z)
+                self._frames_left -= 1
+                return True
+
+        return False
 
 
 def _rz(a: float) -> np.ndarray:
@@ -290,6 +343,25 @@ def main() -> None:
         "--bg-dir",
         default=str(Path(__file__).resolve().parent / "assets" / "backgrounds"),
     )
+    p.add_argument(
+        "--perturb-interval",
+        type=int,
+        default=0,
+        help=(
+            "Inject a random angular perturbation to face_0 every N frames during "
+            "recording. Set to 0 to disable. Use 15 to match the perturbed "
+            "training runs."
+        ),
+    )
+    p.add_argument(
+        "--perturb-range",
+        type=float,
+        default=0.45,
+        help=(
+            "Half-range of the uniform angular perturbation in radians. "
+            "Matches training collection default."
+        ),
+    )
     args = p.parse_args()
 
     rclpy.init()
@@ -312,6 +384,11 @@ def main() -> None:
     runner = EpisodeRunner(bridge)
 
     config = generator.sample(args.seed)
+    perturber = PerturbController(
+        interval=args.perturb_interval,
+        range_rad=args.perturb_range,
+        seed=config.seed,
+    )
     log.info(
         "seed=%d  n_faces=%d  bg=%s  motion=%s  label=%s",
         args.seed, len(config.faces), config.background_id,
@@ -344,7 +421,8 @@ def main() -> None:
             log.warning("Frame %d: timeout", frame_idx)
             break
         f = node.get_frame_with_face()
-        runner.step(WARMUP_SECS + frame_idx / CAMERA_HZ)
+        positions = runner.step(WARMUP_SECS + frame_idx / CAMERA_HZ)
+        perturber.step(frame_idx, positions, bridge.set_pose)
         if f is not None:
             frames.append(f)
 

@@ -618,7 +618,7 @@ Extend `web_video_server` or add a simple Flask/FastAPI app on the Pi that shows
 # Communicates with vla_node via ros2 param set / ros2 topic echo
 ```
 
-### 8c — Voice command integration (stretch goal)
+### 8c — Voice command integration
 
 Use a local speech-to-text model (e.g. Whisper tiny) to accept voice commands:
 
@@ -626,8 +626,6 @@ Use a local speech-to-text model (e.g. Whisper tiny) to accept voice commands:
 User: "Hey Ocelot, follow the person in the hat"
 → Whisper STT → text → closest match in token cache → ros2 param set
 ```
-
-This is a stretch goal — only pursue if Steps 1-7 are complete and working well.
 
 **Success gate**: Commands can be changed at runtime and the robot responds appropriately
 (e.g. switching from "track the face" to "follow the person on the left" changes which
