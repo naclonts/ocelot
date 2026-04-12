@@ -42,6 +42,8 @@ ros2 param set /remote_vla_client_node command "look at the person"
 ros2 param set /remote_vla_client_node request_timeout_sec 1.0
 ```
 
+Validation and Pi checks are in [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
+
 ### Development
 
 ```bash
@@ -140,23 +142,9 @@ make sim-gpu     # Gazebo GUI — GPU accelerated (requires NVIDIA runtime)
 make sim-xauth   # one-time X11 auth setup (re-run if display session changes)
 ```
 
-The colcon build is fast on repeat runs — named volumes (`sim_build`, `sim_install`) cache artifacts between container invocations.
-
-After ~15 seconds the sim is fully up: the face billboard starts oscillating in both pan (Y) and tilt (Z), and the tracker follows it automatically. No manual steps needed.
-
-Verify tracking is working from a second shell in the container:
-```bash
-ros2 topic echo /joint_states --field position   # pan/tilt positions should change
-```
-
 More sim workflows, including the episode runner and scenario-generator smoke tests, are in
 [docs/SIM.md](docs/SIM.md). Data collection, training, checkpoint evaluation, and VLA sim/live
 validation are in [docs/TRAINING.md](docs/TRAINING.md).
-
----
-
-Validation and bring-up checks are in [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
-
 
 ## Project Structure
 
