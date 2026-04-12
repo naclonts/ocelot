@@ -37,7 +37,7 @@ from torch.utils.data import Dataset
 
 # ImageNet statistics — DINOv2 expects these
 IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
-IMAGENET_STD  = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+IMAGENET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
 
 class OcelotDataset(Dataset):
@@ -88,22 +88,20 @@ class OcelotDataset(Dataset):
         if shards is not None:
             shard_set = set(shards)
             split_files = [
-                p for p in split_files
+                p
+                for p in split_files
                 if p.parent.name.startswith("shard_")
                 and int(p.parent.name.split("_", 1)[1]) in shard_set
             ]
         if not split_files:
-            raise FileNotFoundError(
-                f"No {split}.txt files found under {dataset_dir}"
-            )
+            raise FileNotFoundError(f"No {split}.txt files found under {dataset_dir}")
 
         # Collect all (episodes_dir, ep_id) pairs across shards, then truncate.
         all_episodes: list[tuple[Path, str]] = []
         for split_file in sorted(split_files):
             shard_dir = split_file.parent
             episodes_dir = shard_dir / "episodes"
-            ep_ids = [line.strip() for line in split_file.read_text().splitlines()
-                      if line.strip()]
+            ep_ids = [line.strip() for line in split_file.read_text().splitlines() if line.strip()]
             for ep_id in ep_ids:
                 all_episodes.append((episodes_dir, ep_id))
 
@@ -159,14 +157,16 @@ class OcelotDataset(Dataset):
         h5_path, frame_idx = self._index[idx]
 
         with h5py.File(h5_path, "r", swmr=True) as f:
-            frame_hwc = f["frames"][frame_idx]          # (224,224,3) uint8
-            pan_vel   = float(f["pan_vel"][frame_idx])
-            tilt_vel  = float(f["tilt_vel"][frame_idx])
-            cmd       = f["cmd"][()].decode("utf-8") if isinstance(f["cmd"][()], bytes) \
-                        else str(f["cmd"][()])
+            frame_hwc = f["frames"][frame_idx]  # (224,224,3) uint8
+            pan_vel = float(f["pan_vel"][frame_idx])
+            tilt_vel = float(f["tilt_vel"][frame_idx])
+            cmd = (
+                f["cmd"][()].decode("utf-8")
+                if isinstance(f["cmd"][()], bytes)
+                else str(f["cmd"][()])
+            )
             raw_lk = f["label_key"][()]
-            label_key = raw_lk.decode("utf-8") if isinstance(raw_lk, bytes) \
-                        else str(raw_lk)
+            label_key = raw_lk.decode("utf-8") if isinstance(raw_lk, bytes) else str(raw_lk)
 
         # Convert to (3,224,224) float32 tensor in [0, 1]
         frame_f32 = frame_hwc.astype(np.float32) / 255.0
@@ -175,19 +175,23 @@ class OcelotDataset(Dataset):
         if self.augment is not None:
             frame_t = self.augment(frame_t)
 
-        mean = torch.as_tensor(IMAGENET_MEAN, dtype=frame_t.dtype, device=frame_t.device).view(3, 1, 1)
-        std = torch.as_tensor(IMAGENET_STD, dtype=frame_t.dtype, device=frame_t.device).view(3, 1, 1)
+        mean = torch.as_tensor(IMAGENET_MEAN, dtype=frame_t.dtype, device=frame_t.device).view(
+            3, 1, 1
+        )
+        std = torch.as_tensor(IMAGENET_STD, dtype=frame_t.dtype, device=frame_t.device).view(
+            3, 1, 1
+        )
         frame_t = (frame_t - mean) / std  # ImageNet normalise
 
         if self.transform is not None:
             frame_t = self.transform(frame_t)
 
         return {
-            "frame":     frame_t,                              # (3,224,224) float32
-            "cmd":       cmd,                                  # str
-            "label_key": label_key,                            # str
-            "pan_vel":   torch.tensor(pan_vel,  dtype=torch.float32),
-            "tilt_vel":  torch.tensor(tilt_vel, dtype=torch.float32),
+            "frame": frame_t,  # (3,224,224) float32
+            "cmd": cmd,  # str
+            "label_key": label_key,  # str
+            "pan_vel": torch.tensor(pan_vel, dtype=torch.float32),
+            "tilt_vel": torch.tensor(tilt_vel, dtype=torch.float32),
         }
 
     # ------------------------------------------------------------------
@@ -204,17 +208,17 @@ class OcelotDataset(Dataset):
             collate = lambda b: OcelotDataset.collate_fn(b, tokenizer)
             DataLoader(ds, collate_fn=collate)
         """
-        frames    = torch.stack([s["frame"]    for s in batch])   # (B,3,224,224)
-        pan_vels  = torch.stack([s["pan_vel"]  for s in batch])   # (B,)
-        tilt_vels = torch.stack([s["tilt_vel"] for s in batch])   # (B,)
-        targets   = torch.stack([pan_vels, tilt_vels], dim=1)     # (B,2)
-        cmds      = [s["cmd"]       for s in batch]
+        frames = torch.stack([s["frame"] for s in batch])  # (B,3,224,224)
+        pan_vels = torch.stack([s["pan_vel"] for s in batch])  # (B,)
+        tilt_vels = torch.stack([s["tilt_vel"] for s in batch])  # (B,)
+        targets = torch.stack([pan_vels, tilt_vels], dim=1)  # (B,2)
+        cmds = [s["cmd"] for s in batch]
         label_keys = [s["label_key"] for s in batch]
 
         result = {
-            "frames":     frames,
-            "targets":    targets,
-            "cmds":       cmds,
+            "frames": frames,
+            "targets": targets,
+            "cmds": cmds,
             "label_keys": label_keys,
         }
 
@@ -226,7 +230,7 @@ class OcelotDataset(Dataset):
                 truncation=True,
                 max_length=77,
             )
-            result["input_ids"]      = tokens["input_ids"]
+            result["input_ids"] = tokens["input_ids"]
             result["attention_mask"] = tokens["attention_mask"]
 
         return result

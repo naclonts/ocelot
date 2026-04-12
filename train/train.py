@@ -64,6 +64,7 @@ log = logging.getLogger(__name__)
 # DataLoader helpers
 # ---------------------------------------------------------------------------
 
+
 def build_loaders(
     dataset_dir: Path,
     batch_size: int,
@@ -86,7 +87,7 @@ def build_loaders(
         shards=shards,
         label_keys=label_keys,
     )
-    val_ds   = OcelotDataset(
+    val_ds = OcelotDataset(
         "val",
         dataset_dir,
         max_episodes=max_episodes,
@@ -122,6 +123,7 @@ def build_loaders(
 # Training / evaluation steps
 # ---------------------------------------------------------------------------
 
+
 def train_one_epoch(
     model: VLAModel,
     loader: DataLoader,
@@ -139,9 +141,9 @@ def train_one_epoch(
     n_batches = 0
 
     for batch in loader:
-        frames         = batch["frames"].to(device, non_blocking=True)
-        targets        = batch["targets"].to(device, non_blocking=True)
-        input_ids      = batch["input_ids"].to(device, non_blocking=True)
+        frames = batch["frames"].to(device, non_blocking=True)
+        targets = batch["targets"].to(device, non_blocking=True)
+        input_ids = batch["input_ids"].to(device, non_blocking=True)
         attention_mask = batch["attention_mask"].to(device, non_blocking=True)
         confidence_tgt = torch.tensor(
             [0.0 if key == "no_face" else 1.0 for key in batch["label_keys"]],
@@ -217,11 +219,11 @@ def evaluate(
     confidence_total = 0
 
     for batch in loader:
-        frames         = batch["frames"].to(device, non_blocking=True)
-        targets        = batch["targets"].to(device, non_blocking=True)
-        input_ids      = batch["input_ids"].to(device, non_blocking=True)
+        frames = batch["frames"].to(device, non_blocking=True)
+        targets = batch["targets"].to(device, non_blocking=True)
+        input_ids = batch["input_ids"].to(device, non_blocking=True)
         attention_mask = batch["attention_mask"].to(device, non_blocking=True)
-        label_keys     = batch["label_keys"]
+        label_keys = batch["label_keys"]
 
         pred, confidence = model(
             frames,
@@ -264,39 +266,76 @@ def evaluate(
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description="Train VLA model on Ocelot dataset with MLflow tracking"
     )
     p.add_argument(
-        "--dataset_dir", required=True, type=Path,
+        "--dataset_dir",
+        required=True,
+        type=Path,
         help="Path to dataset/ with shard_*/train.txt layout (or flat single-shard)",
     )
     p.add_argument(
-        "--output_dir", required=True, type=Path,
+        "--output_dir",
+        required=True,
+        type=Path,
         help="Directory for checkpoints; created if it doesn't exist",
     )
-    p.add_argument("--epochs",          type=int,   default=10)
-    p.add_argument("--batch_size",      type=int,   default=64)
-    p.add_argument("--lr",              type=float, default=3e-4)
-    p.add_argument("--warmup_steps",    type=int,   default=500,
-                   help="Linear LR warmup steps (0 to disable)")
-    p.add_argument("--resume",          type=Path,  default=None, metavar="CKPT",
-                   help="Resume training from checkpoint (best.pt or last.pt)")
-    p.add_argument("--n_fusion_layers", type=int,   default=2)
-    p.add_argument("--n_heads",         type=int,   default=6)
-    p.add_argument("--num_workers",     type=int,   default=8,
-                   help="DataLoader worker processes (set 0 to debug in main process)")
-    p.add_argument("--amp",             action="store_true",
-                   help="Mixed-precision training (fp16); halves VRAM, ~2× faster")
-    p.add_argument("--max_episodes",    type=int,   default=None,
-                   help="Cap total episodes per split (train and val); useful for fast sweep runs")
-    p.add_argument("--shards",          type=int,   nargs="+", default=None, metavar="N",
-                   help="Only train on these shard numbers (e.g. --shards 26 27 28 29 30 31)")
-    p.add_argument("--label_keys",     type=str,   nargs="+", default=None, metavar="KEY",
-                   help="Only train on episodes with these label_key values (e.g. --label_keys track)")
-    p.add_argument("--domain_randomization", action="store_true",
-                   help="Apply training-only visual augmentations before ImageNet normalization")
+    p.add_argument("--epochs", type=int, default=10)
+    p.add_argument("--batch_size", type=int, default=64)
+    p.add_argument("--lr", type=float, default=3e-4)
+    p.add_argument(
+        "--warmup_steps", type=int, default=500, help="Linear LR warmup steps (0 to disable)"
+    )
+    p.add_argument(
+        "--resume",
+        type=Path,
+        default=None,
+        metavar="CKPT",
+        help="Resume training from checkpoint (best.pt or last.pt)",
+    )
+    p.add_argument("--n_fusion_layers", type=int, default=2)
+    p.add_argument("--n_heads", type=int, default=6)
+    p.add_argument(
+        "--num_workers",
+        type=int,
+        default=8,
+        help="DataLoader worker processes (set 0 to debug in main process)",
+    )
+    p.add_argument(
+        "--amp",
+        action="store_true",
+        help="Mixed-precision training (fp16); halves VRAM, ~2× faster",
+    )
+    p.add_argument(
+        "--max_episodes",
+        type=int,
+        default=None,
+        help="Cap total episodes per split (train and val); useful for fast sweep runs",
+    )
+    p.add_argument(
+        "--shards",
+        type=int,
+        nargs="+",
+        default=None,
+        metavar="N",
+        help="Only train on these shard numbers (e.g. --shards 26 27 28 29 30 31)",
+    )
+    p.add_argument(
+        "--label_keys",
+        type=str,
+        nargs="+",
+        default=None,
+        metavar="KEY",
+        help=("Only train on episodes with these label_key values (e.g. --label_keys track)"),
+    )
+    p.add_argument(
+        "--domain_randomization",
+        action="store_true",
+        help="Apply training-only visual augmentations before ImageNet normalization",
+    )
     p.add_argument("--color_jitter_prob", type=float, default=1.0)
     p.add_argument("--brightness_jitter", type=float, default=0.2)
     p.add_argument("--contrast_jitter", type=float, default=0.2)
@@ -316,16 +355,20 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--gradient_prob", type=float, default=0.3)
     p.add_argument("--gradient_strength_min", type=float, default=0.08)
     p.add_argument("--gradient_strength_max", type=float, default=0.25)
-    p.add_argument("--confidence_weight", type=float, default=1.0,
-                   help="Weight for the confidence-head binary loss (0 to disable)")
-    p.add_argument("--experiment",      type=str,   default="ocelot",
-                   help="MLflow experiment name")
+    p.add_argument(
+        "--confidence_weight",
+        type=float,
+        default=1.0,
+        help="Weight for the confidence-head binary loss (0 to disable)",
+    )
+    p.add_argument("--experiment", type=str, default="ocelot", help="MLflow experiment name")
     return p.parse_args()
 
 
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def main() -> None:
     args = parse_args()
@@ -336,6 +379,7 @@ def main() -> None:
 
     # Tokenizer — same vocabulary as the model's frozen CLIPTextModel
     from transformers import CLIPTokenizerFast
+
     log.info("Loading CLIP tokenizer …")
     tokenizer = CLIPTokenizerFast.from_pretrained(VLAModel.CLIP_ID)
 
@@ -371,18 +415,23 @@ def main() -> None:
         train_augment = DomainRandomizationTransform(aug_cfg)
         log.info("Domain randomization enabled: %s", asdict(aug_cfg))
     train_loader, val_loader = build_loaders(
-        args.dataset_dir, args.batch_size, args.num_workers, tokenizer,
+        args.dataset_dir,
+        args.batch_size,
+        args.num_workers,
+        tokenizer,
         train_augment=train_augment,
         max_episodes=args.max_episodes,
         shards=args.shards,
         label_keys=args.label_keys,
     )
     train_ds = train_loader.dataset
-    val_ds   = val_loader.dataset
+    val_ds = val_loader.dataset
     log.info(
         "Dataset: %d episodes / %d train frames — %d episodes / %d val frames",
-        train_ds.n_episodes, len(train_ds),
-        val_ds.n_episodes,   len(val_ds),
+        train_ds.n_episodes,
+        len(train_ds),
+        val_ds.n_episodes,
+        len(val_ds),
     )
 
     # Model
@@ -393,7 +442,7 @@ def main() -> None:
         pretrained=True,
     ).to(device)
     n_trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    n_total     = sum(p.numel() for p in model.parameters())
+    n_total = sum(p.numel() for p in model.parameters())
     log.info("Params: %d trainable / %d total", n_trainable, n_total)
 
     # Loss, optimizer, scheduler
@@ -405,18 +454,28 @@ def main() -> None:
     steps_per_epoch = len(train_loader)
     total_steps = steps_per_epoch * args.epochs
     cosine = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer, T_max=total_steps - args.warmup_steps,
+        optimizer,
+        T_max=total_steps - args.warmup_steps,
     )
     if args.warmup_steps > 0:
         warmup = torch.optim.lr_scheduler.LinearLR(
-            optimizer, start_factor=1e-6 / args.lr, total_iters=args.warmup_steps,
+            optimizer,
+            start_factor=1e-6 / args.lr,
+            total_iters=args.warmup_steps,
         )
         scheduler = torch.optim.lr_scheduler.SequentialLR(
-            optimizer, schedulers=[warmup, cosine], milestones=[args.warmup_steps],
+            optimizer,
+            schedulers=[warmup, cosine],
+            milestones=[args.warmup_steps],
         )
     else:
         scheduler = cosine
-    log.info("Steps/epoch: %d, total: %d, warmup: %d", steps_per_epoch, total_steps, args.warmup_steps)
+    log.info(
+        "Steps/epoch: %d, total: %d, warmup: %d",
+        steps_per_epoch,
+        total_steps,
+        args.warmup_steps,
+    )
     scaler = torch.amp.GradScaler("cuda") if args.amp else None
     if args.amp:
         log.info("AMP enabled (GradScaler)")
@@ -428,26 +487,26 @@ def main() -> None:
     mlflow.pytorch.autolog(log_every_n_epoch=1, log_models=False)
     mlflow.set_experiment(args.experiment)
     with mlflow.start_run():
-        mlflow.log_params({
-            "epochs":          args.epochs,
-            "batch_size":      args.batch_size,
-            "lr":              args.lr,
-            "n_fusion_layers": args.n_fusion_layers,
-            "n_heads":         args.n_heads,
-            "amp":             args.amp,
-            "dataset_dir":     str(args.dataset_dir),
-            "max_episodes":    args.max_episodes,
-            "shards":          str(args.shards) if args.shards else "all",
-            "label_keys":      str(args.label_keys) if args.label_keys else "all",
-            "n_trainable":     n_trainable,
-            "warmup_steps":    args.warmup_steps,
-            "domain_randomization": args.domain_randomization,
-            "confidence_weight": args.confidence_weight,
-        })
+        mlflow.log_params(
+            {
+                "epochs": args.epochs,
+                "batch_size": args.batch_size,
+                "lr": args.lr,
+                "n_fusion_layers": args.n_fusion_layers,
+                "n_heads": args.n_heads,
+                "amp": args.amp,
+                "dataset_dir": str(args.dataset_dir),
+                "max_episodes": args.max_episodes,
+                "shards": str(args.shards) if args.shards else "all",
+                "label_keys": str(args.label_keys) if args.label_keys else "all",
+                "n_trainable": n_trainable,
+                "warmup_steps": args.warmup_steps,
+                "domain_randomization": args.domain_randomization,
+                "confidence_weight": args.confidence_weight,
+            }
+        )
         if args.domain_randomization:
-            mlflow.log_params({
-                f"aug_{k}": v for k, v in asdict(aug_cfg).items()
-            })
+            mlflow.log_params({f"aug_{k}": v for k, v in asdict(aug_cfg).items()})
 
         best_val_loss = float("inf")
         start_epoch = 0
@@ -463,20 +522,27 @@ def main() -> None:
                 scaler.load_state_dict(ckpt["scaler"])
             start_epoch = ckpt["epoch"] + 1
             best_val_loss = ckpt.get("best_val_loss", float("inf"))
-            log.info("Resumed from %s (epoch %d, best_val_loss=%.5f)",
-                     args.resume, ckpt["epoch"], best_val_loss)
+            log.info(
+                "Resumed from %s (epoch %d, best_val_loss=%.5f)",
+                args.resume,
+                ckpt["epoch"],
+                best_val_loss,
+            )
 
         for epoch in range(start_epoch, args.epochs):
             log.info("── Epoch %d/%d ──", epoch + 1, args.epochs)
 
             train_loss = train_one_epoch(
-                model, train_loader, optimizer, criterion, device, scaler,
+                model,
+                train_loader,
+                optimizer,
+                criterion,
+                device,
+                scaler,
                 scheduler=scheduler,
                 confidence_weight=args.confidence_weight,
             )
-            val_result = evaluate(
-                model, val_loader, criterion, device, include_aux=True
-            )
+            val_result = evaluate(model, val_loader, criterion, device, include_aux=True)
             if len(val_result) == 3:
                 val_loss, per_label_mse, aux_metrics = val_result
             else:
@@ -486,8 +552,8 @@ def main() -> None:
             current_lr = scheduler.get_last_lr()[0]
             metrics: dict[str, float] = {
                 "train_loss": train_loss,
-                "val_loss":   val_loss,
-                "lr":         current_lr,
+                "val_loss": val_loss,
+                "lr": current_lr,
                 **{f"val_mse_{k}": v for k, v in per_label_mse.items()},
                 **{f"val_{k}": v for k, v in aux_metrics.items()},
             }
@@ -495,7 +561,9 @@ def main() -> None:
 
             log.info(
                 "  train_loss=%.5f  val_loss=%.5f  lr=%.2e",
-                train_loss, val_loss, current_lr,
+                train_loss,
+                val_loss,
+                current_lr,
             )
             for k, v in per_label_mse.items():
                 log.info("  val_mse_%-22s %.5f", k, v)

@@ -63,19 +63,18 @@ class VLANode(Node):
     def __init__(self) -> None:
         super().__init__("vla_node")
 
-        self.declare_parameter("checkpoint",  "")
+        self.declare_parameter("checkpoint", "")
         self.declare_parameter("token_cache", "")
-        self.declare_parameter("command",     "track the face")
-        self.declare_parameter("max_vel",     0.3)
-        self.declare_parameter("max_accel",   0.0)
-        self.declare_parameter("deadband",    0.03)
-        self.declare_parameter("enabled",     True)
+        self.declare_parameter("command", "track the face")
+        self.declare_parameter("max_vel", 0.3)
+        self.declare_parameter("max_accel", 0.0)
+        self.declare_parameter("deadband", 0.03)
+        self.declare_parameter("enabled", True)
 
         checkpoint_str = self.get_parameter("checkpoint").value
         if not checkpoint_str:
             self.get_logger().fatal(
-                "~checkpoint parameter is required. "
-                "Pass -p checkpoint:=/path/to/best.onnx"
+                "~checkpoint parameter is required. Pass -p checkpoint:=/path/to/best.onnx"
             )
             raise RuntimeError("checkpoint not set")
 
@@ -87,21 +86,17 @@ class VLANode(Node):
                 token_cache=token_cache_str,
             )
         except ImportError as e:
-            self.get_logger().fatal(
-                "onnxruntime not installed. Run: pip3 install onnxruntime"
-            )
+            self.get_logger().fatal("onnxruntime not installed. Run: pip3 install onnxruntime")
             raise RuntimeError("onnxruntime missing") from e
 
         self.get_logger().info(f"Loading ONNX model from {checkpoint_str} …")
-        self.get_logger().info(
-            f"ONNX session ready (provider: {self._engine.provider})"
-        )
+        self.get_logger().info(f"ONNX session ready (provider: {self._engine.provider})")
         self.get_logger().info(f"Command: {cmd_requested!r}")
         self._command = cmd_requested
 
-        self._bridge  = CvBridge()
-        self._pub     = self.create_publisher(Twist, "/cmd_vel", 10)
-        self._tick    = 0
+        self._bridge = CvBridge()
+        self._pub = self.create_publisher(Twist, "/cmd_vel", 10)
+        self._tick = 0
         self._prev_pan: float = 0.0
         self._prev_tilt: float = 0.0
 
@@ -131,18 +126,19 @@ class VLANode(Node):
         pan_vel = float(result["pan_vel"])
         tilt_vel = float(result["tilt_vel"])
 
-        pan_in_db  = abs(pan_vel)  < deadband
+        pan_in_db = abs(pan_vel) < deadband
         tilt_in_db = abs(tilt_vel) < deadband
         if pan_in_db and tilt_in_db:
             self.get_logger().info(
-                f"[t{self._tick + 1}] IN DEADBAND  raw=({pan_vel:+.4f},{tilt_vel:+.4f}) db=±{deadband:.3f}"
+                f"[t{self._tick + 1}] IN DEADBAND  "
+                f"raw=({pan_vel:+.4f},{tilt_vel:+.4f}) db=±{deadband:.3f}"
             )
         if pan_in_db:
             pan_vel = 0.0
         if tilt_in_db:
             tilt_vel = 0.0
 
-        pan_vel  = float(np.clip(pan_vel, -max_vel, max_vel))
+        pan_vel = float(np.clip(pan_vel, -max_vel, max_vel))
         tilt_vel = float(np.clip(tilt_vel, -max_vel, max_vel))
 
         # Rate-limit: cap how fast velocity can change per frame.
@@ -153,10 +149,12 @@ class VLANode(Node):
         max_accel = float(self.get_parameter("max_accel").value)
         if max_accel > 0.0:
             max_delta = max_accel / 10.0
-            pan_vel  = float(np.clip(pan_vel,  self._prev_pan - max_delta,
-                                     self._prev_pan + max_delta))
-            tilt_vel = float(np.clip(tilt_vel, self._prev_tilt - max_delta,
-                                     self._prev_tilt + max_delta))
+            pan_vel = float(
+                np.clip(pan_vel, self._prev_pan - max_delta, self._prev_pan + max_delta)
+            )
+            tilt_vel = float(
+                np.clip(tilt_vel, self._prev_tilt - max_delta, self._prev_tilt + max_delta)
+            )
         self._prev_pan = pan_vel
         self._prev_tilt = tilt_vel
 

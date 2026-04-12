@@ -58,8 +58,8 @@ _print_lock = threading.Lock()
 # Model / provider constants
 # ---------------------------------------------------------------------------
 
-_OPENAI_MODELS  = frozenset({"gpt-image-1", "gpt-image-1.5", "gpt-image-1-mini"})
-_ALL_MODELS     = sorted(_OPENAI_MODELS)
+_OPENAI_MODELS = frozenset({"gpt-image-1", "gpt-image-1.5", "gpt-image-1-mini"})
+_ALL_MODELS = sorted(_OPENAI_MODELS)
 
 # Models available via Runware's OpenAI-compatible proxy and their internal IDs
 _RUNWARE_MODEL_IDS = {
@@ -87,6 +87,7 @@ def _load_dotenv() -> None:
 
     try:
         from dotenv import load_dotenv
+
         load_dotenv(env_path, override=False)  # shell env takes precedence
         return
     except ImportError:
@@ -101,7 +102,7 @@ def _load_dotenv() -> None:
             key, _, value = line.partition("=")
             key = key.strip()
             value = value.strip().strip('"').strip("'")
-            os.environ.setdefault(key, value)   # don't override shell env
+            os.environ.setdefault(key, value)  # don't override shell env
 
 
 # ---------------------------------------------------------------------------
@@ -134,6 +135,7 @@ def _sanitize_prompt(prompt: str) -> str:
 # Size parsing
 # ---------------------------------------------------------------------------
 
+
 def _parse_wh(size: str) -> tuple[int, int]:
     """Parse '1024x1024' → (1024, 1024).  'auto' maps to (1024, 1024)."""
     if size == "auto":
@@ -146,7 +148,16 @@ def _parse_wh(size: str) -> tuple[int, int]:
 # OpenAI backend (direct)
 # ---------------------------------------------------------------------------
 
-def _generate_openai(client, face_id: str, prompt: str, *, model: str, size: str, quality: str) -> bytes:
+
+def _generate_openai(
+    client,
+    face_id: str,
+    prompt: str,
+    *,
+    model: str,
+    size: str,
+    quality: str,
+) -> bytes:
     """
     Call the OpenAI image generation API and return raw PNG bytes.
     Retries on rate-limit errors with exponential backoff (up to 5 attempts).
@@ -184,7 +195,16 @@ def _generate_openai(client, face_id: str, prompt: str, *, model: str, size: str
 # Runware backend (OpenAI models proxied through Runware)
 # ---------------------------------------------------------------------------
 
-def _generate_runware(api_key: str, face_id: str, prompt: str, *, model: str, size: str, quality: str) -> bytes:
+
+def _generate_runware(
+    api_key: str,
+    face_id: str,
+    prompt: str,
+    *,
+    model: str,
+    size: str,
+    quality: str,
+) -> bytes:
     """
     Call the Runware API with an OpenAI model and return raw PNG bytes.
     Uses providerSettings.openai to pass background=transparent and quality.
@@ -200,27 +220,29 @@ def _generate_runware(api_key: str, face_id: str, prompt: str, *, model: str, si
     clean_prompt = _sanitize_prompt(prompt)
     w, h = _parse_wh(size)
 
-    payload = [{
-        "taskType":        "imageInference",
-        "taskUUID":        str(_uuid_mod.uuid4()),
-        "model":           runware_model_id,
-        "positivePrompt":  clean_prompt,
-        "width":           w,
-        "height":          h,
-        "numberResults":   1,
-        "outputType":      ["base64Data"],
-        "outputFormat":    "PNG",
-        "providerSettings": {
-            "openai": {
-                "quality":    quality,
-                "background": "transparent",
-            }
-        },
-    }]
+    payload = [
+        {
+            "taskType": "imageInference",
+            "taskUUID": str(_uuid_mod.uuid4()),
+            "model": runware_model_id,
+            "positivePrompt": clean_prompt,
+            "width": w,
+            "height": h,
+            "numberResults": 1,
+            "outputType": ["base64Data"],
+            "outputFormat": "PNG",
+            "providerSettings": {
+                "openai": {
+                    "quality": quality,
+                    "background": "transparent",
+                }
+            },
+        }
+    ]
 
     headers = {
         "Authorization": f"Bearer {api_key}",
-        "Content-Type":  "application/json",
+        "Content-Type": "application/json",
     }
 
     delay = 5.0
@@ -273,35 +295,71 @@ def _generate_runware(api_key: str, face_id: str, prompt: str, *, model: str, si
 # Dispatch
 # ---------------------------------------------------------------------------
 
-def _generate_one(ctx: dict, face_id: str, prompt: str, *, model: str, provider: str, size: str, quality: str) -> bytes:
+
+def _generate_one(
+    ctx: dict,
+    face_id: str,
+    prompt: str,
+    *,
+    model: str,
+    provider: str,
+    size: str,
+    quality: str,
+) -> bytes:
     """Route to the correct backend based on provider."""
     if provider == "runware":
-        return _generate_runware(ctx["runware_api_key"], face_id, prompt, model=model, size=size, quality=quality)
-    return _generate_openai(ctx["openai_client"], face_id, prompt, model=model, size=size, quality=quality)
+        return _generate_runware(
+            ctx["runware_api_key"],
+            face_id,
+            prompt,
+            model=model,
+            size=size,
+            quality=quality,
+        )
+    return _generate_openai(
+        ctx["openai_client"],
+        face_id,
+        prompt,
+        model=model,
+        size=size,
+        quality=quality,
+    )
 
 
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main():
     parser = argparse.ArgumentParser(
         description="Generate transparent-background face images via AI image APIs."
     )
     parser.add_argument(
-        "--input", "-i", required=True, type=Path,
+        "--input",
+        "-i",
+        required=True,
+        type=Path,
         help="Path to face_descriptions.json",
     )
     parser.add_argument(
-        "--out", "-o", type=Path, default=None,
+        "--out",
+        "-o",
+        type=Path,
+        default=None,
         help="Output directory for PNGs (default: same directory as --input)",
     )
     parser.add_argument(
-        "--model", "-m", default="gpt-image-1.5", choices=_ALL_MODELS,
+        "--model",
+        "-m",
+        default="gpt-image-1.5",
+        choices=_ALL_MODELS,
         help="Image generation model (default: gpt-image-1.5)",
     )
     parser.add_argument(
-        "--provider", default="openai", choices=["openai", "runware"],
+        "--provider",
+        default="openai",
+        choices=["openai", "runware"],
         help=(
             "API provider (default: openai).  "
             "'runware' proxies the request through Runware; "
@@ -309,37 +367,53 @@ def main():
         ),
     )
     parser.add_argument(
-        "--quality", choices=["low", "medium", "high"], default="high",
+        "--quality",
+        choices=["low", "medium", "high"],
+        default="high",
         help="Image quality (default: high)",
     )
     parser.add_argument(
-        "--size", default="1024x1024",
+        "--size",
+        default="1024x1024",
         choices=["1024x1024", "1536x1024", "1024x1536", "auto"],
         help="Image size (default: 1024x1024; waist_up crops always use 1024x1536)",
     )
     parser.add_argument(
-        "--delay", type=float, default=1.0,
+        "--delay",
+        type=float,
+        default=1.0,
         help="Seconds to wait between API calls (default: 1.0)",
     )
     parser.add_argument(
-        "--limit", "-n", type=int, default=None,
+        "--limit",
+        "-n",
+        type=int,
+        default=None,
         help="Maximum number of images to generate (from the start of the file, or from --start)",
     )
     parser.add_argument(
-        "--start", type=int, default=None,
+        "--start",
+        type=int,
+        default=None,
         help="0-based index of first face to process (inclusive)",
     )
     parser.add_argument(
-        "--end", type=int, default=None,
+        "--end",
+        type=int,
+        default=None,
         help="0-based index of last face to process (exclusive)",
     )
     parser.add_argument(
-        "--workers", "-w", type=int, default=1,
+        "--workers",
+        "-w",
+        type=int,
+        default=1,
         help="Number of concurrent worker threads (default: 1, sequential). "
-             "Values of 3-5 work well for Runware; use 1 for OpenAI to avoid rate limits.",
+        "Values of 3-5 work well for Runware; use 1 for OpenAI to avoid rate limits.",
     )
     parser.add_argument(
-        "--dry-run", action="store_true",
+        "--dry-run",
+        action="store_true",
         help="Print what would be generated without calling the API",
     )
     args = parser.parse_args()
@@ -348,8 +422,7 @@ def main():
     if args.provider == "runware" and args.model not in _RUNWARE_MODEL_IDS:
         supported = ", ".join(sorted(_RUNWARE_MODEL_IDS))
         print(
-            f"ERROR: --provider runware only supports: {supported}\n"
-            f"  Got: --model {args.model}",
+            f"ERROR: --provider runware only supports: {supported}\n  Got: --model {args.model}",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -372,11 +445,11 @@ def main():
         out_dir.mkdir(parents=True, exist_ok=True)
 
     # ---- Subset selection ---------------------------------------------------
-    start  = args.start if args.start is not None else 0
-    end    = args.end   if args.end   is not None else len(faces)
+    start = args.start if args.start is not None else 0
+    end = args.end if args.end is not None else len(faces)
     subset = faces[start:end]
     if args.limit is not None:
-        subset = subset[:args.limit]
+        subset = subset[: args.limit]
 
     if not subset:
         print("Nothing to generate (empty subset).")
@@ -391,10 +464,10 @@ def main():
         print(f"  quality  : {args.quality}  size: {args.size}")
         print()
         for face in subset:
-            out_path   = out_dir / f"{face['face_id']}.png"
-            face_size  = "1024x1536" if face.get("crop_level") == "waist_up" else args.size
-            status     = "EXISTS" if out_path.exists() else "to generate"
-            clean      = _sanitize_prompt(face["prompt"])
+            out_path = out_dir / f"{face['face_id']}.png"
+            face_size = "1024x1536" if face.get("crop_level") == "waist_up" else args.size
+            status = "EXISTS" if out_path.exists() else "to generate"
+            clean = _sanitize_prompt(face["prompt"])
             print(f"  [{face['face_id']}] {face_size}  {status}")
             print(f"    prompt: {clean[:120]}{'...' if len(clean) > 120 else ''}")
         return
@@ -434,26 +507,30 @@ def main():
         ctx["runware_api_key"] = api_key
 
     # ---- Generation loop ----------------------------------------------------
-    total     = len(subset)
-    skipped   = 0
+    total = len(subset)
+    skipped = 0
     generated = 0
-    failed    = []
+    failed = []
 
     concurrent = args.workers > 1
     delay_note = f"  delay={args.delay}s" if not concurrent else f"  workers={args.workers}"
     print(f"Generating {total} face image(s) → {out_dir}")
-    print(f"  model={args.model}  provider={args.provider}  quality={args.quality}  size={args.size} (waist_up→1024x1536){delay_note}")
+    print(
+        f"  model={args.model}  provider={args.provider}  "
+        f"quality={args.quality}  size={args.size} "
+        f"(waist_up→1024x1536){delay_note}"
+    )
     print()
 
     def _run_task(face, idx):
         """Generate one face. Returns ('skip'|'ok'|'fail', face_id)."""
-        face_id    = face["face_id"]
-        prompt     = face["prompt"]
+        face_id = face["face_id"]
+        prompt = face["prompt"]
         crop_level = face.get("crop_level", "")
-        size       = "1024x1536" if crop_level == "waist_up" else args.size
-        out_path   = out_dir / f"{face_id}.png"
-        w          = len(str(total))
-        prefix     = f"[{idx:>{w}}/{total}] {face_id}"
+        size = "1024x1536" if crop_level == "waist_up" else args.size
+        out_path = out_dir / f"{face_id}.png"
+        w = len(str(total))
+        prefix = f"[{idx:>{w}}/{total}] {face_id}"
 
         if out_path.exists():
             with _print_lock:
@@ -466,8 +543,13 @@ def main():
 
         try:
             png_bytes = _generate_one(
-                ctx, face_id, prompt,
-                model=args.model, provider=args.provider, size=size, quality=args.quality,
+                ctx,
+                face_id,
+                prompt,
+                model=args.model,
+                provider=args.provider,
+                size=size,
+                quality=args.quality,
             )
         except Exception as exc:
             with _print_lock:
@@ -477,7 +559,7 @@ def main():
         out_path.write_bytes(png_bytes)
         elapsed = time.monotonic() - t0
         with _print_lock:
-            print(f"{prefix}  done ({elapsed:.1f}s, {len(png_bytes)//1024} KB)")
+            print(f"{prefix}  done ({elapsed:.1f}s, {len(png_bytes) // 1024} KB)")
         return ("ok", face_id)
 
     if not concurrent:

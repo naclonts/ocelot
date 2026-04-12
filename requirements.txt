@@ -118,3 +118,4 @@ wcwidth==0.6.0
 wrapt==2.1.1
 yarl==1.22.0
 zc.lockfile==4.0
+ruff==0.15.10

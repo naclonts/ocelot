@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+if [[ -x "$repo_root/.venv/bin/python" ]]; then
+  ruff_cmd=("$repo_root/.venv/bin/python" -m ruff)
+elif command -v python3 >/dev/null 2>&1 && python3 -m ruff --version >/dev/null 2>&1; then
+  ruff_cmd=(python3 -m ruff)
+else
+  echo "ruff is not installed. Install dependencies, then re-run the commit." >&2
+  exit 1
+fi
+
+mapfile -d '' staged_py_files < <(git diff --cached --name-only --diff-filter=ACMR -z -- '*.py')
+
+if [[ "${#staged_py_files[@]}" -eq 0 ]]; then
+  exit 0
+fi
+
+"${ruff_cmd[@]}" check --fix "${staged_py_files[@]}"
+"${ruff_cmd[@]}" format "${staged_py_files[@]}"
+git add -- "${staged_py_files[@]}"

@@ -43,6 +43,16 @@ ros2 param set /remote_vla_client_node command "look at the person"
 ros2 param set /remote_vla_client_node request_timeout_sec 1.0
 ```
 
+### Development
+
+```bash
+make lint          # run Ruff
+make hook-install  # enable the tracked pre-commit hook
+```
+
+The pre-commit hook auto-runs `ruff check --fix` and `ruff format` on staged
+Python files, then re-stages the results before the commit completes.
+
 `docker compose up` loads `models/active.onnx` — a symlink to the currently active INT8 model.
 By default the Pi now exposes its ROS 2 graph on the LAN (`ROS_LOCALHOST_ONLY=0`), so a laptop
 on the same network can inspect topics like `/camera/image_raw`. Set `ROS_LOCALHOST_ONLY=1` if

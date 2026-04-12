@@ -18,10 +18,18 @@ endef
 
 VLA_ONNX ?= runs/sweep-v0.0.2-1500-ep/lr1e-4_l2/best.onnx
 
-.PHONY: sim-build sim sim-gui sim-gpu sim-vla sim-vla-eval sim-shell sim-xauth faces backgrounds dvc-push dvc-pull use-model help
+.PHONY: sim-build sim sim-gui sim-gpu sim-vla sim-vla-eval sim-shell sim-xauth faces backgrounds dvc-push dvc-pull use-model lint hook-install help
 
 help:
 	@grep -E '^##' Makefile | sed 's/## //'
+
+## lint        run Ruff lint checks
+lint:
+	./.venv/bin/python -m ruff check ocelot sim tests train
+
+## hook-install install the tracked git pre-commit hook for auto-fixing staged Python files
+hook-install:
+	git config core.hooksPath .githooks
 
 ## sim-build   build the sim Docker image
 sim-build:

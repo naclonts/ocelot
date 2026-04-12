@@ -57,6 +57,7 @@ log = logging.getLogger(__name__)
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _decode(val) -> str:
     """Safely decode an h5py scalar string (bytes or str)."""
     if hasattr(val, "decode"):
@@ -86,6 +87,7 @@ def _discover_shards(parent: Path) -> list[Path]:
 # Split writer (mirrored from collect_data.py)
 # ---------------------------------------------------------------------------
 
+
 def _write_splits(
     episode_ids: list[int],
     scenario_ids: list[str],
@@ -100,22 +102,21 @@ def _write_splits(
     rng = random.Random(42)
     rng.shuffle(sid_list)
 
-    n         = len(sid_list)
-    train_ids = sid_list[:int(0.8 * n)]
-    val_ids   = sid_list[int(0.8 * n):int(0.9 * n)]
-    test_ids  = sid_list[int(0.9 * n):]
+    n = len(sid_list)
+    train_ids = sid_list[: int(0.8 * n)]
+    val_ids = sid_list[int(0.8 * n) : int(0.9 * n)]
+    test_ids = sid_list[int(0.9 * n) :]
 
     for split_name, sids in [("train", train_ids), ("val", val_ids), ("test", test_ids)]:
         eps = [ep for sid in sids for ep in groups[sid]]
-        (out_dir / f"{split_name}.txt").write_text(
-            "\n".join(f"{e:06d}" for e in sorted(eps))
-        )
+        (out_dir / f"{split_name}.txt").write_text("\n".join(f"{e:06d}" for e in sorted(eps)))
         log.info("  %s.txt: %d episodes", split_name, len(eps))
 
 
 # ---------------------------------------------------------------------------
 # Merge
 # ---------------------------------------------------------------------------
+
 
 def merge_shards(shard_dirs: list[Path], out_dir: Path) -> bool:
     """Merge shard_dirs into out_dir.
@@ -125,11 +126,11 @@ def merge_shards(shard_dirs: list[Path], out_dir: Path) -> bool:
     out_episodes = out_dir / "episodes"
     out_episodes.mkdir(parents=True, exist_ok=True)
 
-    all_ok          = True
-    all_ep_ids:     list[int]  = []
+    all_ok = True
+    all_ep_ids: list[int] = []
     all_scenario_ids: list[str] = []
     all_label_counts: dict[str, int] = {}
-    shard_metadata:  list[dict] = []
+    shard_metadata: list[dict] = []
     n_linked = 0
 
     for shard_dir in shard_dirs:
@@ -164,16 +165,19 @@ def merge_shards(shard_dirs: list[Path], out_dir: Path) -> bool:
 
             dst = out_episodes / h5_path.name
             if dst.exists():
-                log.warning("  Episode %s already exists in output — skipping duplicate", h5_path.name)
+                log.warning(
+                    "  Episode %s already exists in output — skipping duplicate",
+                    h5_path.name,
+                )
                 all_ok = False
                 continue
 
             # Read scenario_id and label_key from the episode file.
             try:
                 with h5py.File(h5_path, "r") as f:
-                    label_key   = _decode(f["label_key"][()])
-                    meta_str    = _decode(f["metadata"][()])
-                    meta        = json.loads(meta_str)
+                    label_key = _decode(f["label_key"][()])
+                    meta_str = _decode(f["metadata"][()])
+                    meta = json.loads(meta_str)
                     scenario_id = meta.get("scenario_id", f"ep_{ep_id}")
             except Exception as exc:
                 log.error("  Could not read %s: %s — skipping", h5_path.name, exc)
@@ -207,28 +211,34 @@ def merge_shards(shard_dirs: list[Path], out_dir: Path) -> bool:
             max(r[1] for r in seed_ranges),
         ]
 
-    camera_hz          = shard_metadata[0].get("camera_hz",          10)   if shard_metadata else 10
-    episode_secs       = shard_metadata[0].get("episode_secs",       10.0) if shard_metadata else 10.0
-    frames_per_episode = shard_metadata[0].get("frames_per_episode", 100)  if shard_metadata else 100
-    image_shape        = shard_metadata[0].get("image_shape",   [224,224,3]) if shard_metadata else [224,224,3]
+    camera_hz = shard_metadata[0].get("camera_hz", 10) if shard_metadata else 10
+    episode_secs = shard_metadata[0].get("episode_secs", 10.0) if shard_metadata else 10.0
+    frames_per_episode = shard_metadata[0].get("frames_per_episode", 100) if shard_metadata else 100
+    image_shape = (
+        shard_metadata[0].get("image_shape", [224, 224, 3]) if shard_metadata else [224, 224, 3]
+    )
 
     merged_meta = {
-        "schema_version":     "1.0",
-        "collection_date":    datetime.now().isoformat(),
-        "n_episodes":         len(all_ep_ids),
-        "camera_hz":          camera_hz,
-        "episode_secs":       episode_secs,
+        "schema_version": "1.0",
+        "collection_date": datetime.now().isoformat(),
+        "n_episodes": len(all_ep_ids),
+        "camera_hz": camera_hz,
+        "episode_secs": episode_secs,
         "frames_per_episode": frames_per_episode,
-        "image_shape":        image_shape,
-        "label_counts":       all_label_counts,
-        "n_shards":           len(shard_dirs),
-        "shard_dirs":         [str(d) for d in shard_dirs],
+        "image_shape": image_shape,
+        "label_counts": all_label_counts,
+        "n_shards": len(shard_dirs),
+        "shard_dirs": [str(d) for d in shard_dirs],
     }
     if merged_seed_range is not None:
         merged_meta["seed_range"] = merged_seed_range
 
     (out_dir / "metadata.json").write_text(json.dumps(merged_meta, indent=2))
-    log.info("Wrote metadata.json (%d episodes, %d label types)", len(all_ep_ids), len(all_label_counts))
+    log.info(
+        "Wrote metadata.json (%d episodes, %d label types)",
+        len(all_ep_ids),
+        len(all_label_counts),
+    )
 
     if all_ok:
         log.info("Merge complete — output: %s", out_dir)
@@ -242,21 +252,27 @@ def merge_shards(shard_dirs: list[Path], out_dir: Path) -> bool:
 # Entry point
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Merge parallel collection shards into one dataset.",
     )
     src_group = parser.add_mutually_exclusive_group(required=True)
     src_group.add_argument(
-        "--shards", nargs="+", metavar="DIR",
+        "--shards",
+        nargs="+",
+        metavar="DIR",
         help="Explicit list of shard directories to merge.",
     )
     src_group.add_argument(
-        "--parent", metavar="DIR",
+        "--parent",
+        metavar="DIR",
         help="Parent directory containing shard_N/ subdirectories to auto-discover.",
     )
     parser.add_argument(
-        "--output", required=True, metavar="DIR",
+        "--output",
+        required=True,
+        metavar="DIR",
         help="Output directory for the merged dataset.",
     )
     args = parser.parse_args()

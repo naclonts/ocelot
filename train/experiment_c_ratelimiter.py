@@ -77,7 +77,10 @@ def main():
 
     # Load model
     print(f"Loading {model_path} ...")
-    sess = ort.InferenceSession(str(model_path), providers=["CUDAExecutionProvider", "CPUExecutionProvider"])
+    sess = ort.InferenceSession(
+        str(model_path),
+        providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
+    )
     print(f"Provider: {sess.get_providers()[0]}")
 
     # Load token cache
@@ -140,7 +143,11 @@ def main():
             B = len(fb)
             pred = sess.run(
                 ["actions"],
-                {"frames": fb, "input_ids": np.repeat(input_ids, B, 0), "attention_mask": np.repeat(attn_mask, B, 0)},
+                {
+                    "frames": fb,
+                    "input_ids": np.repeat(input_ids, B, 0),
+                    "attention_mask": np.repeat(attn_mask, B, 0),
+                },
             )[0]
             preds_list.append(pred)
 
@@ -167,8 +174,12 @@ def main():
             gt_axis = gt[:, axis]
             transitions = _detect_transitions(gt_axis)
             for t_cross in transitions:
-                raw_lags.append(_measure_lag_at_transition(gt_axis, preds_clipped[:, axis], t_cross))
-                lim_lags.append(_measure_lag_at_transition(gt_axis, preds_limited[:, axis], t_cross))
+                raw_lags.append(
+                    _measure_lag_at_transition(gt_axis, preds_clipped[:, axis], t_cross)
+                )
+                lim_lags.append(
+                    _measure_lag_at_transition(gt_axis, preds_limited[:, axis], t_cross)
+                )
 
                 # Overshoot: in 5 frames after transition, does output have opposite sign to GT?
                 window = min(5, T - t_cross)
@@ -195,14 +206,30 @@ def main():
     print(f"  MSE (rate-limited):      {lim_mse_sum / n_frames_total:.6f}")
     print(f"  MSE increase from limiter: {(lim_mse_sum - raw_mse_sum) / raw_mse_sum * 100:+.1f}%")
     print()
-    print(f"  Transition lag (frames until output matches new GT sign):")
-    print(f"    Pan  — raw: mean={np.mean(raw_lag_pan):.2f}, median={np.median(raw_lag_pan):.1f}  |  limited: mean={np.mean(lim_lag_pan):.2f}, median={np.median(lim_lag_pan):.1f}")
-    print(f"    Tilt — raw: mean={np.mean(raw_lag_tilt):.2f}, median={np.median(raw_lag_tilt):.1f}  |  limited: mean={np.mean(lim_lag_tilt):.2f}, median={np.median(lim_lag_tilt):.1f}")
+    print("  Transition lag (frames until output matches new GT sign):")
+    print(
+        f"    Pan  — raw: mean={np.mean(raw_lag_pan):.2f}, "
+        f"median={np.median(raw_lag_pan):.1f}  |  "
+        f"limited: mean={np.mean(lim_lag_pan):.2f}, "
+        f"median={np.median(lim_lag_pan):.1f}"
+    )
+    print(
+        f"    Tilt — raw: mean={np.mean(raw_lag_tilt):.2f}, "
+        f"median={np.median(raw_lag_tilt):.1f}  |  "
+        f"limited: mean={np.mean(lim_lag_tilt):.2f}, "
+        f"median={np.median(lim_lag_tilt):.1f}"
+    )
     print()
     if overshoot_total > 0:
-        print(f"  Overshoot (opposite-sign frames in 5-frame window after transitions):")
-        print(f"    Raw:     {overshoot_raw_count}/{overshoot_total} ({100 * overshoot_raw_count / overshoot_total:.1f}%)")
-        print(f"    Limited: {overshoot_lim_count}/{overshoot_total} ({100 * overshoot_lim_count / overshoot_total:.1f}%)")
+        print("  Overshoot (opposite-sign frames in 5-frame window after transitions):")
+        print(
+            f"    Raw:     {overshoot_raw_count}/{overshoot_total} "
+            f"({100 * overshoot_raw_count / overshoot_total:.1f}%)"
+        )
+        print(
+            f"    Limited: {overshoot_lim_count}/{overshoot_total} "
+            f"({100 * overshoot_lim_count / overshoot_total:.1f}%)"
+        )
     print(f"{'=' * 60}")
 
     # Save results as JSON for ticket
@@ -226,7 +253,9 @@ def main():
             "limited_count": overshoot_lim_count,
             "total_window_frames": overshoot_total,
             "raw_pct": float(100 * overshoot_raw_count / overshoot_total) if overshoot_total else 0,
-            "limited_pct": float(100 * overshoot_lim_count / overshoot_total) if overshoot_total else 0,
+            "limited_pct": (
+                float(100 * overshoot_lim_count / overshoot_total) if overshoot_total else 0
+            ),
         },
     }
     out_path = _root / "runs" / "v0.1.0" / "experiment_c_results.json"

@@ -32,12 +32,12 @@ from PIL import Image
 
 # 6 plain solid colors.  RGB tuples.
 PLAIN_COLORS = [
-    ("plain_white",       (255, 255, 255)),
-    ("plain_light_gray",  (210, 210, 210)),
-    ("plain_dark_gray",   (80,  80,  80)),
-    ("plain_beige",       (230, 215, 195)),
-    ("plain_off_white",   (245, 240, 230)),
-    ("plain_blue_gray",   (180, 190, 205)),
+    ("plain_white", (255, 255, 255)),
+    ("plain_light_gray", (210, 210, 210)),
+    ("plain_dark_gray", (80, 80, 80)),
+    ("plain_beige", (230, 215, 195)),
+    ("plain_off_white", (245, 240, 230)),
+    ("plain_blue_gray", (180, 190, 205)),
 ]
 
 
@@ -59,7 +59,8 @@ def main():
         description="Generate plain-color background textures for the scenario generator."
     )
     parser.add_argument(
-        "--out", type=Path,
+        "--out",
+        type=Path,
         default=Path("sim/assets/backgrounds"),
         help="Output directory (default: sim/assets/backgrounds/)",
     )
@@ -74,9 +75,8 @@ def main():
         existing = json.loads(manifest_path.read_text())
         # Keep existing entries that are not plain colors (photos),
         # then append/replace the programmatically generated plain ones.
-        photo_entries = [e for e in existing if e["id"] not in {p["id"] for p, _ in [(x, None) for x in plain_entries]}]
-        # Rebuild: plain entries first (predictable order), then photos
         plain_ids = {e["id"] for e in plain_entries}
+        # Rebuild: plain entries first (predictable order), then photos
         photo_entries = [e for e in existing if e["id"] not in plain_ids]
         merged = plain_entries + photo_entries
     else:
@@ -90,7 +90,10 @@ def main():
     print("To add photo textures:")
     print("  1. Place .jpg/.png files in", args.out)
     print("  2. Add entries to", manifest_path)
-    print('     e.g.: {"id": "indoor_office", "tags": ["indoor", "busy"], "file": "indoor_office.jpg"}')
+    print(
+        '     e.g.: {"id": "indoor_office", "tags": ["indoor", "busy"], '
+        '"file": "indoor_office.jpg"}'
+    )
 
 
 if __name__ == "__main__":

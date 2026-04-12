@@ -42,17 +42,18 @@ if str(_root) not in sys.path:
 
 # ImageNet normalisation — must match train/dataset.py
 _MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
-_STD  = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
-_SCALE   = 3          # 224 → 672 px display
-_IMG_PX  = 224 * _SCALE
-_BAR_H   = 80         # info panel height in pixels
-_MAX_VEL = 2.0        # velocity bar full-scale (rad/s)
+_SCALE = 3  # 224 → 672 px display
+_IMG_PX = 224 * _SCALE
+_BAR_H = 80  # info panel height in pixels
+_MAX_VEL = 2.0  # velocity bar full-scale (rad/s)
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _preprocess(frame_hwc: np.ndarray) -> np.ndarray:
     """uint8 (224,224,3) RGB → float32 (1,3,224,224) ImageNet-normalised."""
@@ -61,8 +62,9 @@ def _preprocess(frame_hwc: np.ndarray) -> np.ndarray:
     return np.ascontiguousarray(f.transpose(2, 0, 1)[np.newaxis])  # (1,3,224,224)
 
 
-def _vel_bar(canvas: np.ndarray, x: int, y: int, w: int, h: int,
-             gt: float, pred: float, label: str) -> None:
+def _vel_bar(
+    canvas: np.ndarray, x: int, y: int, w: int, h: int, gt: float, pred: float, label: str
+) -> None:
     """Draw a horizontal velocity bar for one axis.
 
     Centre line = zero velocity.  Green bar = GT, orange bar = prediction.
@@ -81,13 +83,21 @@ def _vel_bar(canvas: np.ndarray, x: int, y: int, w: int, h: int,
         mid = y + h // 2
         cv2.rectangle(canvas, (x0, mid - thick), (x1, mid + thick), color, -1)
 
-    _bar(gt,   (60, 180, 60),   6)   # green  — ground truth
-    _bar(pred, (30, 140, 210),  3)   # blue   — prediction
+    _bar(gt, (60, 180, 60), 6)  # green  — ground truth
+    _bar(pred, (30, 140, 210), 3)  # blue   — prediction
 
     # Label + values
     txt = f"{label}  gt={gt:+.3f}  pred={pred:+.3f}"
-    cv2.putText(canvas, txt, (x + 4, y + h - 6),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.38, (200, 200, 200), 1, cv2.LINE_AA)
+    cv2.putText(
+        canvas,
+        txt,
+        (x + 4, y + h - 6),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.38,
+        (200, 200, 200),
+        1,
+        cv2.LINE_AA,
+    )
 
 
 def _find_episode(ep_id: str, dataset_dir: Path) -> Path:
@@ -103,8 +113,10 @@ def _find_episode(ep_id: str, dataset_dir: Path) -> Path:
 # Main watch loop
 # ---------------------------------------------------------------------------
 
-def watch(ep_path: Path, model_path: Path, token_cache_path: Path | None,
-          fps: int, save: Path | None) -> None:
+
+def watch(
+    ep_path: Path, model_path: Path, token_cache_path: Path | None, fps: int, save: Path | None
+) -> None:
     import onnxruntime as ort
 
     # Load model
@@ -115,10 +127,10 @@ def watch(ep_path: Path, model_path: Path, token_cache_path: Path | None,
 
     # Load episode
     with h5py.File(ep_path, "r") as f:
-        frames   = f["frames"][:]       # (N,224,224,3) uint8 RGB
-        pan_gt   = f["pan_vel"][:]      # (N,) float32
-        tilt_gt  = f["tilt_vel"][:]     # (N,) float32
-        cmd_raw  = f["cmd"][()]
+        frames = f["frames"][:]  # (N,224,224,3) uint8 RGB
+        pan_gt = f["pan_vel"][:]  # (N,) float32
+        tilt_gt = f["tilt_vel"][:]  # (N,) float32
+        cmd_raw = f["cmd"][()]
     cmd = cmd_raw.decode() if isinstance(cmd_raw, bytes) else str(cmd_raw)
     n = len(frames)
 
@@ -130,32 +142,32 @@ def watch(ep_path: Path, model_path: Path, token_cache_path: Path | None,
         if key != cmd:
             print(f"Command {cmd!r} not in token cache; using {key!r}")
         entry = cache[key]
-        input_ids      = np.array([entry["input_ids"]],      dtype=np.int64)
+        input_ids = np.array([entry["input_ids"]], dtype=np.int64)
         attention_mask = np.array([entry["attention_mask"]], dtype=np.int64)
     else:
         from transformers import CLIPTokenizerFast
         from train.model import VLAModel
+
         tok = CLIPTokenizerFast.from_pretrained(VLAModel.CLIP_ID)
-        enc = tok(cmd, return_tensors="np", padding="max_length",
-                  truncation=True, max_length=77)
-        input_ids      = enc["input_ids"].astype(np.int64)
+        enc = tok(cmd, return_tensors="np", padding="max_length", truncation=True, max_length=77)
+        input_ids = enc["input_ids"].astype(np.int64)
         attention_mask = enc["attention_mask"].astype(np.int64)
 
     print(f"Episode       : {ep_path.stem}")
     print(f"Command       : {cmd!r}")
-    print(f"Frames        : {n} @ {fps} fps  ({n/fps:.1f} s)")
+    print(f"Frames        : {n} @ {fps} fps  ({n / fps:.1f} s)")
     print()
 
     # Run all inference up front (fast enough; avoids per-frame latency)
     print("Running inference …", end="", flush=True)
     frames_nchw = np.stack([_preprocess(frames[i])[0] for i in range(n)])  # (N,3,224,224)
-    ids_rep  = np.repeat(input_ids,      n, axis=0)
+    ids_rep = np.repeat(input_ids, n, axis=0)
     mask_rep = np.repeat(attention_mask, n, axis=0)
     preds = sess.run(
         ["actions"],
         {"frames": frames_nchw, "input_ids": ids_rep, "attention_mask": mask_rep},
     )[0]  # (N, 2)
-    pan_pred  = preds[:, 0]
+    pan_pred = preds[:, 0]
     tilt_pred = preds[:, 1]
     print(" done.")
 
@@ -186,33 +198,62 @@ def watch(ep_path: Path, model_path: Path, token_cache_path: Path | None,
 
         # Progress bar along bottom edge of panel
         pct = (i + 1) / n
-        cv2.rectangle(panel, (0, _BAR_H - 4), (int(out_w * pct), _BAR_H - 1),
-                      (80, 80, 80), -1)
+        cv2.rectangle(panel, (0, _BAR_H - 4), (int(out_w * pct), _BAR_H - 1), (80, 80, 80), -1)
 
         # Frame counter + command
-        header = f"frame {i+1:3d}/{n}   {cmd}"
-        cv2.putText(panel, header, (4, 14),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.42, (180, 180, 180), 1, cv2.LINE_AA)
+        header = f"frame {i + 1:3d}/{n}   {cmd}"
+        cv2.putText(
+            panel, header, (4, 14), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (180, 180, 180), 1, cv2.LINE_AA
+        )
 
         # Velocity bars — each takes half the width
         half = out_w // 2
         bar_h = (_BAR_H - 22) // 2
-        _vel_bar(panel,    0, 18,      half, bar_h, pan_gt[i],  pan_pred[i],  "pan ")
-        _vel_bar(panel,    0, 18 + bar_h, half, bar_h, tilt_gt[i], tilt_pred[i], "tilt")
+        _vel_bar(panel, 0, 18, half, bar_h, pan_gt[i], pan_pred[i], "pan ")
+        _vel_bar(panel, 0, 18 + bar_h, half, bar_h, tilt_gt[i], tilt_pred[i], "tilt")
 
         # Legend (right side)
         cv2.rectangle(panel, (half + 8, 22), (half + 22, 30), (60, 180, 60), -1)
-        cv2.putText(panel, "ground truth", (half + 26, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.38, (180, 180, 180), 1, cv2.LINE_AA)
+        cv2.putText(
+            panel,
+            "ground truth",
+            (half + 26, 30),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.38,
+            (180, 180, 180),
+            1,
+            cv2.LINE_AA,
+        )
         cv2.rectangle(panel, (half + 8, 36), (half + 22, 44), (30, 140, 210), -1)
-        cv2.putText(panel, "model pred", (half + 26, 44),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.38, (180, 180, 180), 1, cv2.LINE_AA)
+        cv2.putText(
+            panel,
+            "model pred",
+            (half + 26, 44),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.38,
+            (180, 180, 180),
+            1,
+            cv2.LINE_AA,
+        )
 
         # Per-frame MSE badge
-        frame_mse = float((pan_pred[i] - pan_gt[i])**2 + (tilt_pred[i] - tilt_gt[i])**2) / 2
-        color = (60, 200, 60) if frame_mse < 0.05 else (30, 100, 220) if frame_mse < 0.20 else (40, 40, 200)
-        cv2.putText(panel, f"MSE {frame_mse:.4f}", (half + 8, 60),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.42, color, 1, cv2.LINE_AA)
+        frame_mse = float((pan_pred[i] - pan_gt[i]) ** 2 + (tilt_pred[i] - tilt_gt[i]) ** 2) / 2
+        if frame_mse < 0.05:
+            color = (60, 200, 60)
+        elif frame_mse < 0.20:
+            color = (30, 100, 220)
+        else:
+            color = (40, 40, 200)
+        cv2.putText(
+            panel,
+            f"MSE {frame_mse:.4f}",
+            (half + 8, 60),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.42,
+            color,
+            1,
+            cv2.LINE_AA,
+        )
 
         canvas = np.vstack([bgr, panel])
 
@@ -243,17 +284,25 @@ def watch(ep_path: Path, model_path: Path, token_cache_path: Path | None,
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     p = argparse.ArgumentParser(description="Watch a dataset episode with VLA predictions.")
     p.add_argument("episode_id", help="6-digit episode ID (e.g. 000042)")
-    p.add_argument("--model", required=True, type=Path,
-                   help="Path to ONNX model (e.g. runs/v0.0-smoke/best.onnx)")
-    p.add_argument("--token-cache", type=Path, default=None,
-                   help="Token cache JSON from export_onnx.py (avoids loading transformers)")
+    p.add_argument(
+        "--model",
+        required=True,
+        type=Path,
+        help="Path to ONNX model (e.g. runs/v0.0-smoke/best.onnx)",
+    )
+    p.add_argument(
+        "--token-cache",
+        type=Path,
+        default=None,
+        help="Token cache JSON from export_onnx.py (avoids loading transformers)",
+    )
     p.add_argument("--dataset-dir", default="sim/dataset", type=Path)
     p.add_argument("--fps", type=int, default=10)
-    p.add_argument("--save", type=Path, default=None,
-                   help="Save to MP4 instead of displaying")
+    p.add_argument("--save", type=Path, default=None, help="Save to MP4 instead of displaying")
     args = p.parse_args()
 
     ep_id = f"{int(args.episode_id):06d}"

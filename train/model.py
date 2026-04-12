@@ -25,7 +25,8 @@ Architecture
               (pan_vel, tilt_vel) gated by confidence
 
 Frozen encoders account for ~85M params (DINOv2-small + CLIP text).
-Trainable params: txt_proj + fusion + fusion_norms + pool_scores + action_head + confidence_head ≈ 1.5-2M.
+Trainable params: txt_proj + fusion + fusion_norms + pool_scores +
+action_head + confidence_head ≈ 1.5-2M.
 
 Design notes
 ------------
@@ -95,12 +96,12 @@ class VLAModel(nn.Module):
                          action head (default 0.1). Set 0.0 to disable.
     """
 
-    DINO_ID  = "facebook/dinov2-small"
-    CLIP_ID  = "openai/clip-vit-base-patch32"
-    VIS_DIM  = 384   # DINOv2-small hidden dim
+    DINO_ID = "facebook/dinov2-small"
+    CLIP_ID = "openai/clip-vit-base-patch32"
+    VIS_DIM = 384  # DINOv2-small hidden dim
     # 256 patch tokens + 1 CLS, for all DINOv2 variants at 224×224 input (patch_size=14).
-    VIS_SEQ  = 257
-    TXT_DIM  = 512   # CLIP text hidden dim
+    VIS_SEQ = 257
+    TXT_DIM = 512  # CLIP text hidden dim
 
     def __init__(
         self,
@@ -114,9 +115,10 @@ class VLAModel(nn.Module):
         # ── Encoders (frozen, permanently in eval mode) ───────────────────
         if pretrained:
             from transformers import AutoModel, CLIPTextModel
+
             # use_safetensors=True: required by transformers ≥5.2 (CVE-2025-32434
             # blocks torch.load unless torch ≥2.6; safetensors is unaffected).
-            self.dino      = AutoModel.from_pretrained(self.DINO_ID,  use_safetensors=True)
+            self.dino = AutoModel.from_pretrained(self.DINO_ID, use_safetensors=True)
             self.clip_text = CLIPTextModel.from_pretrained(self.CLIP_ID, use_safetensors=True)
             # Verify the loaded model produces the expected sequence length at
             # the inference image size (224×224), not the training image_size
@@ -130,7 +132,7 @@ class VLAModel(nn.Module):
                 f"gives {expected_seq} tokens but VIS_SEQ={self.VIS_SEQ}."
             )
         else:
-            self.dino      = _VisualStub()
+            self.dino = _VisualStub()
             self.clip_text = _TextStub()
 
         for p in self.dino.parameters():
@@ -148,20 +150,21 @@ class VLAModel(nn.Module):
         self.txt_proj = nn.Linear(self.TXT_DIM, self.VIS_DIM)
 
         # Cross-attention layers: visual tokens (Q) attend to projected text tokens (K, V)
-        self.fusion = nn.ModuleList([
-            nn.MultiheadAttention(
-                embed_dim=self.VIS_DIM,
-                num_heads=n_heads,
-                batch_first=True,
-            )
-            for _ in range(n_fusion_layers)
-        ])
+        self.fusion = nn.ModuleList(
+            [
+                nn.MultiheadAttention(
+                    embed_dim=self.VIS_DIM,
+                    num_heads=n_heads,
+                    batch_first=True,
+                )
+                for _ in range(n_fusion_layers)
+            ]
+        )
 
         # Pre-norm LayerNorm applied before each cross-attention step
-        self.fusion_norms = nn.ModuleList([
-            nn.LayerNorm(self.VIS_DIM)
-            for _ in range(n_fusion_layers)
-        ])
+        self.fusion_norms = nn.ModuleList(
+            [nn.LayerNorm(self.VIS_DIM) for _ in range(n_fusion_layers)]
+        )
 
         # Attention pooling over the 256 patch tokens.
         # Produces a per-patch scalar score; softmax + weighted sum gives a
@@ -170,8 +173,12 @@ class VLAModel(nn.Module):
 
         # MLP action head: pooled patch representation → (pan_vel, tilt_vel)
         self.action_head = nn.Sequential(
-            nn.Linear(self.VIS_DIM, 256), nn.GELU(), nn.Dropout(dropout),
-            nn.Linear(256, 64),           nn.GELU(), nn.Dropout(dropout),
+            nn.Linear(self.VIS_DIM, 256),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(256, 64),
+            nn.GELU(),
+            nn.Dropout(dropout),
             nn.Linear(64, 2),
         )
 
@@ -213,33 +220,35 @@ class VLAModel(nn.Module):
         # the weight gradient computation, and inference tensors cannot be saved
         # for backward (RuntimeError). no_grad avoids this without a copy.
         with torch.no_grad():
-            vis        = self.dino(pixel_values=frames).last_hidden_state       # (B, 257, 384)
+            vis = self.dino(pixel_values=frames).last_hidden_state  # (B, 257, 384)
             txt_hidden = self.clip_text(
                 input_ids, attention_mask=attention_mask
-            ).last_hidden_state                                                  # (B, L,  512)
+            ).last_hidden_state  # (B, L,  512)
 
-        txt_proj = self.txt_proj(txt_hidden)                                    # (B, L,  384)
+        txt_proj = self.txt_proj(txt_hidden)  # (B, L,  384)
 
         # True in positions that should be *ignored* (padding tokens)
-        key_padding_mask = (attention_mask == 0)                                # (B, L)  bool
+        key_padding_mask = attention_mask == 0  # (B, L)  bool
 
         fused = vis
         for attn_layer, norm in zip(self.fusion, self.fusion_norms):
-            normed   = norm(fused)                                              # pre-norm
+            normed = norm(fused)  # pre-norm
             attn_out, _ = attn_layer(
-                normed, txt_proj, txt_proj,
+                normed,
+                txt_proj,
+                txt_proj,
                 key_padding_mask=key_padding_mask,
-            )                                                                    # (B, 257, 384)
-            fused = fused + attn_out                            # residual
+            )  # (B, 257, 384)
+            fused = fused + attn_out  # residual
 
         # Attention pooling over the 256 patch tokens (exclude CLS at index 0).
         # pool_scores learns which patch directions signal face presence/location.
-        patches = fused[:, 1:, :]                                               # (B, 256, 384)
-        weights = torch.softmax(self.pool_scores(patches), dim=1)               # (B, 256,   1)
-        spatial = (weights * patches).sum(dim=1)                                # (B,       384)
+        patches = fused[:, 1:, :]  # (B, 256, 384)
+        weights = torch.softmax(self.pool_scores(patches), dim=1)  # (B, 256,   1)
+        spatial = (weights * patches).sum(dim=1)  # (B,       384)
 
-        actions = 2.0 * torch.tanh(self.action_head(spatial))                   # (B, 2)
-        confidence = self.confidence_head(spatial).squeeze(-1)                  # (B,)
+        actions = 2.0 * torch.tanh(self.action_head(spatial))  # (B, 2)
+        confidence = self.confidence_head(spatial).squeeze(-1)  # (B,)
 
         if gate_actions:
             actions = actions * confidence.unsqueeze(-1)
@@ -253,6 +262,7 @@ class VLAModel(nn.Module):
 # Lightweight stubs — pretrained=False, no HuggingFace downloads required
 # ---------------------------------------------------------------------------
 
+
 class _VisualStub(nn.Module):
     """Stub DINOv2-small: correct output shape, has one frozen parameter
     so gradient tests can verify freezing behaviour without a 85 MB download."""
@@ -265,7 +275,9 @@ class _VisualStub(nn.Module):
     def forward(self, pixel_values: torch.Tensor, **kw):
         B = pixel_values.shape[0]
         hs = torch.zeros(
-            B, VLAModel.VIS_SEQ, VLAModel.VIS_DIM,
+            B,
+            VLAModel.VIS_SEQ,
+            VLAModel.VIS_DIM,
             device=pixel_values.device,
         )
         return SimpleNamespace(last_hidden_state=hs)

@@ -19,8 +19,8 @@ from cv_bridge import CvBridge
 from rclpy.node import Node
 from sensor_msgs.msg import Image
 
-_WORKER = os.path.join(os.path.dirname(__file__), 'capture_worker.py')
-_PYTHON311 = '/usr/bin/python3.11'
+_WORKER = os.path.join(os.path.dirname(__file__), "capture_worker.py")
+_PYTHON311 = "/usr/bin/python3.11"
 
 
 def _worker_env() -> dict:
@@ -32,29 +32,31 @@ def _worker_env() -> dict:
     # OCELOT_ROOT is set in docker-compose.yml to the source directory (/ws/src/ocelot).
     # Needed because colcon --symlink-install adds the build dir (not source) to sys.path,
     # so __file__ resolves to /ws/build/... where .venv doesn't exist.
-    repo_root = os.environ.get('OCELOT_ROOT') or os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-    venv_site = os.path.join(repo_root, '.venv', 'lib', 'python3.11', 'site-packages')
-    sys_pkgs = '/usr/lib/python3/dist-packages'
+    repo_root = os.environ.get("OCELOT_ROOT") or os.path.dirname(
+        os.path.dirname(os.path.realpath(__file__))
+    )
+    venv_site = os.path.join(repo_root, ".venv", "lib", "python3.11", "site-packages")
+    sys_pkgs = "/usr/lib/python3/dist-packages"
     paths = [p for p in [venv_site, sys_pkgs] if os.path.isdir(p)]
     env = os.environ.copy()
-    env['PYTHONPATH'] = ':'.join(paths)
+    env["PYTHONPATH"] = ":".join(paths)
     return env
 
 
 class CameraNode(Node):
     def __init__(self):
-        super().__init__('camera_node')
+        super().__init__("camera_node")
 
-        self.declare_parameter('fps', 15)
-        self.declare_parameter('resolution', [640, 480])
+        self.declare_parameter("fps", 15)
+        self.declare_parameter("resolution", [640, 480])
 
-        fps = self.get_parameter('fps').value
-        resolution = self.get_parameter('resolution').value
+        fps = self.get_parameter("fps").value
+        resolution = self.get_parameter("resolution").value
         self._width, self._height = resolution[0], resolution[1]
         self._frame_bytes = self._width * self._height * 3
 
         self._bridge = CvBridge()
-        self._pub = self.create_publisher(Image, '/camera/image_raw', 10)
+        self._pub = self.create_publisher(Image, "/camera/image_raw", 10)
 
         interpreter = _PYTHON311 if os.path.exists(_PYTHON311) else sys.executable
         self._proc = subprocess.Popen(
@@ -71,18 +73,18 @@ class CameraNode(Node):
 
         self.create_timer(1.0 / fps, self._publish)
         self.get_logger().info(
-            f'Camera node started ({self._width}x{self._height} @ {fps} fps, '
-            f'worker interpreter: {interpreter})'
+            f"Camera node started ({self._width}x{self._height} @ {fps} fps, "
+            f"worker interpreter: {interpreter})"
         )
         try:
             ip = socket.gethostbyname(socket.gethostname())
         except OSError:
-            ip = '<pi-ip>'
+            ip = "<pi-ip>"
         self.get_logger().info(
-            f'\n'
-            f'  ============================================================\n'
-            f'  Stream: http://{ip}:8080/stream?topic=/camera/image_annotated\n'
-            f'  ============================================================'
+            f"\n"
+            f"  ============================================================\n"
+            f"  Stream: http://{ip}:8080/stream?topic=/camera/image_annotated\n"
+            f"  ============================================================"
         )
 
     def _read_frames(self):
@@ -91,8 +93,8 @@ class CameraNode(Node):
                 header = self._proc.stdout.read(4)
                 if len(header) < 4:
                     break
-                size = struct.unpack('>I', header)[0]
-                data = b''
+                size = struct.unpack(">I", header)[0]
+                data = b""
                 while len(data) < size:
                     chunk = self._proc.stdout.read(size - len(data))
                     if not chunk:
@@ -105,20 +107,20 @@ class CameraNode(Node):
                     with self._lock:
                         self._latest_frame = frame
             except Exception as e:
-                self.get_logger().error(f'Frame read error: {e}')
+                self.get_logger().error(f"Frame read error: {e}")
                 break
-        stderr = self._proc.stderr.read().decode(errors='replace')
+        stderr = self._proc.stderr.read().decode(errors="replace")
         if stderr:
-            self.get_logger().error(f'Capture worker stderr:\n{stderr}')
+            self.get_logger().error(f"Capture worker stderr:\n{stderr}")
 
     def _publish(self):
         with self._lock:
             frame = self._latest_frame
         if frame is None:
             return
-        msg = self._bridge.cv2_to_imgmsg(frame, encoding='bgr8')
+        msg = self._bridge.cv2_to_imgmsg(frame, encoding="bgr8")
         msg.header.stamp = self.get_clock().now().to_msg()
-        msg.header.frame_id = 'camera_link'
+        msg.header.frame_id = "camera_link"
         self._pub.publish(msg)
 
     def destroy_node(self):
@@ -140,5 +142,5 @@ def main(args=None):
         rclpy.shutdown()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

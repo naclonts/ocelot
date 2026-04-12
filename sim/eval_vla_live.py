@@ -38,32 +38,33 @@ from sim.scenario_generator.scenario import ScenarioGenerator
 # FK constants — must match urdf/pan_tilt.urdf and oracle_node.py
 # ---------------------------------------------------------------------------
 
-PAN_Z = 0.03   # base_link  → pan_joint, Z offset
+PAN_Z = 0.03  # base_link  → pan_joint, Z offset
 TILT_Z = 0.03  # pan_link   → tilt_joint, Z offset
-CAM_X = 0.02   # tilt_link  → camera_link, X offset
-CAM_Z = 0.01   # tilt_link  → camera_link, Z offset
+CAM_X = 0.02  # tilt_link  → camera_link, X offset
+CAM_Z = 0.01  # tilt_link  → camera_link, Z offset
 
 # ---------------------------------------------------------------------------
 # Evaluation parameters
 # ---------------------------------------------------------------------------
 
 PASS_THRESHOLD_DEG = 10.0  # mean angular error threshold for PASS
-EVAL_DT = 0.1              # step interval seconds (10 Hz — matches camera)
-WARMUP_S = 4.0             # seconds to run motion before measuring
-EVAL_S = 10.0              # seconds to measure
+EVAL_DT = 0.1  # step interval seconds (10 Hz — matches camera)
+WARMUP_S = 4.0  # seconds to run motion before measuring
+EVAL_S = 10.0  # seconds to measure
 
 # Camera home position — must match sim_launch.py VLA override
 HOME_PAN = 0.0
 HOME_TILT = -0.2
-RESET_KP = 3.0             # P-gain for driving joints toward home
-RESET_TOL = 0.02           # rad (~1.1°) — close enough to call it homed
-RESET_TIMEOUT = 5.0        # max seconds to spend homing
-RESET_DT = 0.05            # 20 Hz control loop during reset
+RESET_KP = 3.0  # P-gain for driving joints toward home
+RESET_TOL = 0.02  # rad (~1.1°) — close enough to call it homed
+RESET_TIMEOUT = 5.0  # max seconds to spend homing
+RESET_DT = 0.05  # 20 Hz control loop during reset
 
 
 # ---------------------------------------------------------------------------
 # ROS2 node — latest-value face pose + joint state buffers
 # ---------------------------------------------------------------------------
+
 
 class EvalNode(Node):
     """Minimal ROS2 node that buffers the latest face pose and joint angles."""
@@ -77,11 +78,9 @@ class EvalNode(Node):
         self._face_received = threading.Event()
         self._joints_received = threading.Event()
 
-        self._cmd_pub = self.create_publisher(String, '/episode/cmd', 1)
-        self._vel_pub = self.create_publisher(Twist, '/cmd_vel', 10)
-        self._vla_param_client = self.create_client(
-            SetParameters, '/vla_node/set_parameters'
-        )
+        self._cmd_pub = self.create_publisher(String, "/episode/cmd", 1)
+        self._vel_pub = self.create_publisher(Twist, "/cmd_vel", 10)
+        self._vla_param_client = self.create_client(SetParameters, "/vla_node/set_parameters")
 
         self.create_subscription(Pose, "/model/face_0/pose", self._face_cb, 10)
         self.create_subscription(JointState, "/joint_states", self._joint_cb, 10)
@@ -95,11 +94,13 @@ class EvalNode(Node):
 
     def _face_cb(self, msg: Pose) -> None:
         with self._lock:
-            self._face_pos = np.array([
-                msg.position.x,
-                msg.position.y,
-                msg.position.z,
-            ])
+            self._face_pos = np.array(
+                [
+                    msg.position.x,
+                    msg.position.y,
+                    msg.position.z,
+                ]
+            )
         self._face_received.set()
 
     def _joint_cb(self, msg: JointState) -> None:
@@ -147,9 +148,7 @@ class EvalNode(Node):
             return
         p = RclParameter()
         p.name = "enabled"
-        p.value = ParameterValue(
-            type=ParameterType.PARAMETER_BOOL, bool_value=enabled
-        )
+        p.value = ParameterValue(type=ParameterType.PARAMETER_BOOL, bool_value=enabled)
         req = SetParameters.Request()
         req.parameters = [p]
         future = self._vla_param_client.call_async(req)
@@ -193,6 +192,7 @@ class EvalNode(Node):
 # FK angular error computation
 # ---------------------------------------------------------------------------
 
+
 def _rz(a: float) -> np.ndarray:
     c, s = math.cos(a), math.sin(a)
     return np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
@@ -232,6 +232,7 @@ def _fk_angular_error(
 # ---------------------------------------------------------------------------
 # Per-scenario evaluation
 # ---------------------------------------------------------------------------
+
 
 def eval_scenario(node: EvalNode, runner: EpisodeRunner, config) -> dict:
     """Run one scenario and return error statistics.
@@ -286,6 +287,7 @@ def eval_scenario(node: EvalNode, runner: EpisodeRunner, config) -> dict:
 # Entry point
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     p = argparse.ArgumentParser(
         description="Evaluate a live VLA node against N training-distribution scenarios."
@@ -295,7 +297,10 @@ def main() -> None:
     p.add_argument(
         "--faces-dir",
         default=str(_root / "sim" / "scenario_generator"),
-        help="Dir containing face_descriptions*.json (ScenarioGenerator computes assets/faces from here)",
+        help=(
+            "Dir containing face_descriptions*.json "
+            "(ScenarioGenerator computes assets/faces from here)"
+        ),
     )
     p.add_argument(
         "--bg-dir",
@@ -336,7 +341,9 @@ def main() -> None:
         result.update({"seed": seed, "motion": motion, "label": config.label_key})
         results.append(result)
         status = "PASS" if result["pass"] else "FAIL"
-        print(f"  mean={result['mean']:.1f}°  max={result['max']:.1f}°  n={result['n']}  [{status}]")
+        print(
+            f"  mean={result['mean']:.1f}°  max={result['max']:.1f}°  n={result['n']}  [{status}]"
+        )
 
         # Reset camera to home between scenarios so the VLA doesn't drift
         # randomly while the screen is blank during teardown/setup.

@@ -23,10 +23,14 @@ Usage (inside the sim container, with sim_launch.py already running):
     # collect_data.py defaults to shard index if ROS_DOMAIN_ID is not already set):
     #
     # Step 1: launch one sim stack per shard (each in its own terminal or with &):
-    #   ROS_DOMAIN_ID=0 GZ_PARTITION=0 ros2 launch ocelot sim_launch.py world:=scenario_world use_oracle:=true headless:=true &
-    #   ROS_DOMAIN_ID=1 GZ_PARTITION=1 ros2 launch ocelot sim_launch.py world:=scenario_world use_oracle:=true headless:=true &
-    #   ROS_DOMAIN_ID=2 GZ_PARTITION=2 ros2 launch ocelot sim_launch.py world:=scenario_world use_oracle:=true headless:=true &
-    #   ROS_DOMAIN_ID=3 GZ_PARTITION=3 ros2 launch ocelot sim_launch.py world:=scenario_world use_oracle:=true headless:=true &
+    #   ROS_DOMAIN_ID=0 GZ_PARTITION=0 ros2 launch ocelot sim_launch.py \
+    #       world:=scenario_world use_oracle:=true headless:=true &
+    #   ROS_DOMAIN_ID=1 GZ_PARTITION=1 ros2 launch ocelot sim_launch.py \
+    #       world:=scenario_world use_oracle:=true headless:=true &
+    #   ROS_DOMAIN_ID=2 GZ_PARTITION=2 ros2 launch ocelot sim_launch.py \
+    #       world:=scenario_world use_oracle:=true headless:=true &
+    #   ROS_DOMAIN_ID=3 GZ_PARTITION=3 ros2 launch ocelot sim_launch.py \
+    #       world:=scenario_world use_oracle:=true headless:=true &
     #
     # Step 2: start the collectors with matching ROS_DOMAIN_ID:
     for i in 0 1 2 3; do
@@ -83,38 +87,39 @@ log = logging.getLogger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 
-CAMERA_HZ          = 10      # Hz — must match URDF <update_rate>10</update_rate>
-EPISODE_SECS       = 10.0    # seconds of recorded data per episode
-WARMUP_SECS        = 4.0     # seconds before recording starts (oracle convergence)
-IMG_SIZE           = (224, 224)   # (width, height) for cv2.resize
-FRAMES_PER_EPISODE = int(EPISODE_SECS * CAMERA_HZ)   # 100
+CAMERA_HZ = 10  # Hz — must match URDF <update_rate>10</update_rate>
+EPISODE_SECS = 10.0  # seconds of recorded data per episode
+WARMUP_SECS = 4.0  # seconds before recording starts (oracle convergence)
+IMG_SIZE = (224, 224)  # (width, height) for cv2.resize
+FRAMES_PER_EPISODE = int(EPISODE_SECS * CAMERA_HZ)  # 100
 
 # Periodic perturbation — number of frames to hold each offset so the oracle
 # has time to produce a recovery trajectory before the face snaps back.
-PERTURB_DURATION   = 8       # frames — hold long enough for oracle to start responding
+PERTURB_DURATION = 8  # frames — hold long enough for oracle to start responding
 
 # FOV clamping for perturbations: keep at least half the face billboard in frame.
 # Horizontal: 25° (30° full half-FOV − 5° margin); vertical: 20° (23.4° − 3.4°).
 _PERTURB_FOV_H = math.radians(25)
 _PERTURB_FOV_V = math.radians(20)
-_CAM_Z         = 0.07   # approximate camera z in world coords (m)
+_CAM_Z = 0.07  # approximate camera z in world coords (m)
 
 # Maps scenario label keys to the oracle param value expected by oracle_node.
 # Mirrors the mapping previously in episode_runner._ORACLE_LABEL_MAP.
 _ORACLE_LABEL_MAP: dict[str, str] = {
-    "single_slow":  "slow",
-    "multi_attr":   "track",
-    "track":        "track",
-    "multi_left":   "multi_left",
-    "multi_right":  "multi_right",
-    "centered":     "track",
-    "no_face":      "track",
+    "single_slow": "slow",
+    "multi_attr": "track",
+    "track": "track",
+    "multi_left": "multi_left",
+    "multi_right": "multi_right",
+    "centered": "track",
+    "no_face": "track",
 }
 
 
 # ---------------------------------------------------------------------------
 # ROS2 node — latest-value buffers + event-driven image sync
 # ---------------------------------------------------------------------------
+
 
 class CollectNode(Node):
     """Minimal ROS2 node with latest-value buffers for image and cmd_vel.
@@ -137,19 +142,17 @@ class CollectNode(Node):
         # frame rather than immediately returning a stale one.
         self._image_event = threading.Event()
 
-        self._cmd_pub = self.create_publisher(String, '/episode/cmd', 1)
+        self._cmd_pub = self.create_publisher(String, "/episode/cmd", 1)
 
         # Persistent service client for oracle parameter updates.
         # Reuses the node's DDS connection — no subprocess / re-discovery
         # overhead per episode, unlike the old 'ros2 param set' subprocess.
-        self._oracle_param_client = self.create_client(
-            SetParameters, '/oracle_node/set_parameters'
-        )
+        self._oracle_param_client = self.create_client(SetParameters, "/oracle_node/set_parameters")
         self._oracle_service_available = False  # cached after first wait_for_service
 
-        self.create_subscription(Image,      "/camera/image_raw", self._on_image,        10)
-        self.create_subscription(JointState, "/joint_states",     self._on_joint_states, 10)
-        self.create_subscription(Twist,      "/cmd_vel",          self._on_cmd_vel,      10)
+        self.create_subscription(Image, "/camera/image_raw", self._on_image, 10)
+        self.create_subscription(JointState, "/joint_states", self._on_joint_states, 10)
+        self.create_subscription(Twist, "/cmd_vel", self._on_cmd_vel, 10)
 
     # ------------------------------------------------------------------
     # Callbacks
@@ -206,8 +209,7 @@ class CollectNode(Node):
             return 0.0, 0.0
         return float(msg.angular.z), float(msg.angular.y)
 
-    def configure_oracle(self, label_key: str, num_faces: int,
-                         timeout: float = 10.0) -> None:
+    def configure_oracle(self, label_key: str, num_faces: int, timeout: float = 10.0) -> None:
         """Set oracle_node parameters via the ROS2 SetParameters service.
 
         Uses this node's persistent service client — no subprocess spawn or
@@ -225,14 +227,12 @@ class CollectNode(Node):
             self._oracle_service_available = True
 
         lk = RclParameter()
-        lk.name = 'label_key'
-        lk.value = ParameterValue(type=ParameterType.PARAMETER_STRING,
-                                  string_value=oracle_label)
+        lk.name = "label_key"
+        lk.value = ParameterValue(type=ParameterType.PARAMETER_STRING, string_value=oracle_label)
 
         nf = RclParameter()
-        nf.name = 'num_faces'
-        nf.value = ParameterValue(type=ParameterType.PARAMETER_INTEGER,
-                                  integer_value=num_faces)
+        nf.name = "num_faces"
+        nf.value = ParameterValue(type=ParameterType.PARAMETER_INTEGER, integer_value=num_faces)
 
         req = SetParameters.Request()
         req.parameters = [lk, nf]
@@ -251,14 +251,13 @@ class CollectNode(Node):
 
         for r in future.result().results:
             if not r.successful:
-                raise RuntimeError(
-                    f"configure_oracle: failed to set parameter: {r.reason}"
-                )
+                raise RuntimeError(f"configure_oracle: failed to set parameter: {r.reason}")
 
 
 # ---------------------------------------------------------------------------
 # Periodic perturbation controller
 # ---------------------------------------------------------------------------
+
 
 class PerturbController:
     """Injects periodic angular perturbations into face_0's world position.
@@ -271,19 +270,19 @@ class PerturbController:
     Seeded independently from augmentation and scenario RNGs via seed^0xBEEF.
     """
 
-    def __init__(self, interval: int, range_rad: float, seed: int,
-                 duration: int = PERTURB_DURATION):
-        self.interval  = interval    # 0 = disabled
+    def __init__(
+        self, interval: int, range_rad: float, seed: int, duration: int = PERTURB_DURATION
+    ):
+        self.interval = interval  # 0 = disabled
         self.range_rad = range_rad
-        self.duration  = duration
-        self._rng      = np.random.default_rng(seed ^ 0xBEEF)
+        self.duration = duration
+        self._rng = np.random.default_rng(seed ^ 0xBEEF)
         self._y_offset = 0.0
         self._z_offset = 0.0
-        self._frames_left  = 0
+        self._frames_left = 0
         self._next_trigger = interval  # first trigger at frame `interval`
 
-    def step(self, frame_idx: int, positions: dict,
-             set_pose_fn) -> bool:
+    def step(self, frame_idx: int, positions: dict, set_pose_fn) -> bool:
         """Apply perturbation if active.  Returns True if set_pose was called."""
         if self.interval <= 0:
             return False
@@ -291,26 +290,27 @@ class PerturbController:
         if frame_idx == self._next_trigger:
             face_pos = positions.get("face_0")
             if face_pos is not None:
-                delta_pan  = self._rng.uniform(-self.range_rad, self.range_rad)
+                delta_pan = self._rng.uniform(-self.range_rad, self.range_rad)
                 delta_tilt = self._rng.uniform(-self.range_rad, self.range_rad)
                 face_x = max(face_pos[0], 0.5)
-                self._y_offset   = face_x * np.tan(delta_pan)
-                self._z_offset   = face_x * np.tan(delta_tilt)
+                self._y_offset = face_x * np.tan(delta_pan)
+                self._z_offset = face_x * np.tan(delta_tilt)
                 self._frames_left = self.duration
                 self._next_trigger = frame_idx + self.interval
-                log.debug("perturb frame=%d  Δpan=%.2f  Δtilt=%.2f rad",
-                          frame_idx, delta_pan, delta_tilt)
+                log.debug(
+                    "perturb frame=%d  Δpan=%.2f  Δtilt=%.2f rad", frame_idx, delta_pan, delta_tilt
+                )
 
         if self._frames_left > 0:
             face_pos = positions.get("face_0")
             if face_pos is not None:
                 face_x = max(face_pos[0], 0.5)
-                new_y  = face_pos[1] + self._y_offset
-                new_z  = face_pos[2] + self._z_offset
+                new_y = face_pos[1] + self._y_offset
+                new_z = face_pos[2] + self._z_offset
                 # Clamp to camera FOV so at least half the face remains visible.
                 y_lim = face_x * np.tan(_PERTURB_FOV_H)
                 new_y = float(np.clip(new_y, -y_lim, y_lim))
-                dz    = face_x * np.tan(_PERTURB_FOV_V)
+                dz = face_x * np.tan(_PERTURB_FOV_V)
                 new_z = float(np.clip(new_z, max(0.1, _CAM_Z - dz), _CAM_Z + dz))
                 set_pose_fn("face_0", face_pos[0], new_y, new_z)
                 self._frames_left -= 1
@@ -321,6 +321,7 @@ class PerturbController:
 # ---------------------------------------------------------------------------
 # Camera augmentation
 # ---------------------------------------------------------------------------
+
 
 def _apply_augmentation(
     frame: np.ndarray,
@@ -346,6 +347,7 @@ def _apply_augmentation(
 # ---------------------------------------------------------------------------
 # HDF5 writing
 # ---------------------------------------------------------------------------
+
 
 def _write_hdf5(
     ep_idx: int,
@@ -376,11 +378,11 @@ def _write_hdf5(
             compression="gzip",
             compression_opts=4,
         )
-        f.create_dataset("pan_vel",  data=np.array(pan_vels,  dtype=np.float32))
+        f.create_dataset("pan_vel", data=np.array(pan_vels, dtype=np.float32))
         f.create_dataset("tilt_vel", data=np.array(tilt_vels, dtype=np.float32))
-        f["cmd"]       = config.language_label
+        f["cmd"] = config.language_label
         f["label_key"] = config.label_key
-        f["metadata"]  = json.dumps(config.to_dict())
+        f["metadata"] = json.dumps(config.to_dict())
 
     return path
 
@@ -388,6 +390,7 @@ def _write_hdf5(
 # ---------------------------------------------------------------------------
 # Train / val / test split
 # ---------------------------------------------------------------------------
+
 
 def _write_splits(
     episode_ids: "list[int]",
@@ -407,21 +410,20 @@ def _write_splits(
     rng = random.Random(42)
     rng.shuffle(scenario_ids)
 
-    n         = len(scenario_ids)
-    train_ids = scenario_ids[:int(0.8 * n)]
-    val_ids   = scenario_ids[int(0.8 * n):int(0.9 * n)]
-    test_ids  = scenario_ids[int(0.9 * n):]
+    n = len(scenario_ids)
+    train_ids = scenario_ids[: int(0.8 * n)]
+    val_ids = scenario_ids[int(0.8 * n) : int(0.9 * n)]
+    test_ids = scenario_ids[int(0.9 * n) :]
 
     for split_name, sids in [("train", train_ids), ("val", val_ids), ("test", test_ids)]:
         eps = [ep for sid in sids for ep in groups[sid]]
-        (out_dir / f"{split_name}.txt").write_text(
-            "\n".join(f"{e:06d}" for e in sorted(eps))
-        )
+        (out_dir / f"{split_name}.txt").write_text("\n".join(f"{e:06d}" for e in sorted(eps)))
 
 
 # ---------------------------------------------------------------------------
 # Main collection loop
 # ---------------------------------------------------------------------------
+
 
 def run_collection(node: CollectNode, args) -> None:
     """Outer episode loop: sample → setup → warmup → record → teardown → write."""
@@ -429,23 +431,23 @@ def run_collection(node: CollectNode, args) -> None:
     from sim.scenario_generator.episode_runner import EpisodeRunner
     from sim.scenario_generator.scenario import ScenarioGenerator
 
-    sim_dir         = Path(__file__).resolve().parents[1]
-    faces_dir       = sim_dir / "scenario_generator"
+    sim_dir = Path(__file__).resolve().parents[1]
+    faces_dir = sim_dir / "scenario_generator"
     backgrounds_dir = sim_dir / "assets" / "backgrounds"
 
     generator = ScenarioGenerator(faces_dir, backgrounds_dir)
-    bridge    = GazeboBridge(world="scenario_world")
-    runner    = EpisodeRunner(bridge)
+    bridge = GazeboBridge(world="scenario_world")
+    runner = EpisodeRunner(bridge)
 
     out_dir = Path(args.output)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    episode_ids:  "list[int]"  = []
-    configs:      list         = []
+    episode_ids: "list[int]" = []
+    configs: list = []
     label_counts: "dict[str, int]" = {}
 
     for ep_idx in range(args.base_ep, args.base_ep + args.n_episodes):
-        seed   = args.base_seed + ep_idx
+        seed = args.base_seed + ep_idx
         config = generator.sample(
             seed,
             no_face_rate=args.no_face_rate,
@@ -477,7 +479,7 @@ def run_collection(node: CollectNode, args) -> None:
         # ── Warmup ─────────────────────────────────────────────────────────
         # Drive motion patterns during warmup so the oracle starts from a
         # moving-face state rather than a static-spawn position.
-        warmup_ok    = True
+        warmup_ok = True
         warmup_start = time.monotonic()
         warmup_frame = 0
 
@@ -497,15 +499,15 @@ def run_collection(node: CollectNode, args) -> None:
             continue
 
         # ── Record ─────────────────────────────────────────────────────────
-        frames:    "list[np.ndarray]" = []
-        pan_vels:  "list[float]"      = []
-        tilt_vels: "list[float]"      = []
+        frames: "list[np.ndarray]" = []
+        pan_vels: "list[float]" = []
+        tilt_vels: "list[float]" = []
         record_ok = True
 
         perturber = PerturbController(
-            interval  = args.perturb_interval,
-            range_rad = args.perturb_range,
-            seed      = config.seed,
+            interval=args.perturb_interval,
+            range_rad=args.perturb_range,
+            seed=config.seed,
         )
 
         for frame_idx in range(FRAMES_PER_EPISODE):
@@ -514,8 +516,8 @@ def run_collection(node: CollectNode, args) -> None:
                 record_ok = False
                 break
 
-            raw_frame            = node.get_latest_frame_rgb()
-            pan_vel, tilt_vel    = node.get_pan_tilt_vel()
+            raw_frame = node.get_latest_frame_rgb()
+            pan_vel, tilt_vel = node.get_pan_tilt_vel()
 
             # Advance Gazebo entity positions to this simulation time.
             positions = runner.step(WARMUP_SECS + frame_idx / CAMERA_HZ)
@@ -540,7 +542,9 @@ def run_collection(node: CollectNode, args) -> None:
         if not record_ok or len(frames) != FRAMES_PER_EPISODE:
             log.warning(
                 "ep %06d: incomplete (%d/%d frames) — skipping write",
-                ep_idx, len(frames), FRAMES_PER_EPISODE,
+                ep_idx,
+                len(frames),
+                FRAMES_PER_EPISODE,
             )
             continue
 
@@ -565,21 +569,21 @@ def run_collection(node: CollectNode, args) -> None:
         git_hash = "unknown"
 
     metadata = {
-        "schema_version":     "1.0",
-        "collection_date":    datetime.now().isoformat(),
-        "n_episodes":         len(episode_ids),
-        "camera_hz":          CAMERA_HZ,
-        "episode_secs":       EPISODE_SECS,
+        "schema_version": "1.0",
+        "collection_date": datetime.now().isoformat(),
+        "n_episodes": len(episode_ids),
+        "camera_hz": CAMERA_HZ,
+        "episode_secs": EPISODE_SECS,
         "frames_per_episode": FRAMES_PER_EPISODE,
-        "image_shape":        [224, 224, 3],
-        "label_counts":       label_counts,
-        "seed_range":         [args.base_seed, args.base_seed + args.n_episodes - 1],
-        "perturb_interval":   args.perturb_interval,
-        "perturb_range":      args.perturb_range,
-        "perturb_duration":   PERTURB_DURATION,
-        "no_face_rate":       args.no_face_rate,
-        "centered_rate":      args.centered_rate,
-        "git_hash":           git_hash,
+        "image_shape": [224, 224, 3],
+        "label_counts": label_counts,
+        "seed_range": [args.base_seed, args.base_seed + args.n_episodes - 1],
+        "perturb_interval": args.perturb_interval,
+        "perturb_range": args.perturb_range,
+        "perturb_duration": PERTURB_DURATION,
+        "no_face_rate": args.no_face_rate,
+        "centered_rate": args.centered_rate,
+        "git_hash": git_hash,
     }
     (out_dir / "metadata.json").write_text(json.dumps(metadata, indent=2))
 
@@ -591,20 +595,24 @@ def run_collection(node: CollectNode, args) -> None:
 # Entry point
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Sim data collection pipeline."
-    )
+    parser = argparse.ArgumentParser(description="Sim data collection pipeline.")
     parser.add_argument(
-        "--n_episodes", type=int, required=True,
+        "--n_episodes",
+        type=int,
+        required=True,
         help="Number of episodes to collect.",
     )
     parser.add_argument(
-        "--output", required=True,
+        "--output",
+        required=True,
         help="Output directory for dataset files.",
     )
     parser.add_argument(
-        "--base_seed", type=int, default=None,
+        "--base_seed",
+        type=int,
+        default=None,
         help=(
             "Seed offset: episode i uses seed base_seed + i. "
             "With --shard, defaults to shard*n_episodes; override here to "
@@ -612,11 +620,15 @@ def main() -> None:
         ),
     )
     parser.add_argument(
-        "--base_ep", type=int, default=0,
+        "--base_ep",
+        type=int,
+        default=0,
         help="Episode index offset (for resuming or sharding).  Default: 0.",
     )
     parser.add_argument(
-        "--shard", type=int, default=None,
+        "--shard",
+        type=int,
+        default=None,
         help=(
             "Shard index for parallel collection. "
             "Sets base_ep=shard*n_episodes and writes to <output>/shard_<N>/. "
@@ -625,7 +637,9 @@ def main() -> None:
         ),
     )
     parser.add_argument(
-        "--perturb_interval", type=int, default=30,
+        "--perturb_interval",
+        type=int,
+        default=30,
         help=(
             "Inject a random angular perturbation to face_0 every N frames during "
             "recording, forcing the oracle to produce recovery trajectories. "
@@ -634,7 +648,9 @@ def main() -> None:
         ),
     )
     parser.add_argument(
-        "--perturb_range", type=float, default=0.45,
+        "--perturb_range",
+        type=float,
+        default=0.45,
         help=(
             "Half-range of the uniform angular perturbation in radians. "
             "Camera half-FOV is ~0.524 rad (30°); default 0.45 keeps face in frame. "
@@ -642,11 +658,15 @@ def main() -> None:
         ),
     )
     parser.add_argument(
-        "--no_face_rate", type=float, default=0.10,
+        "--no_face_rate",
+        type=float,
+        default=0.10,
         help="Probability of sampling an empty-scene episode. Default: 0.10.",
     )
     parser.add_argument(
-        "--centered_rate", type=float, default=0.05,
+        "--centered_rate",
+        type=float,
+        default=0.05,
         help="Probability of sampling a centered single-face episode. Default: 0.05.",
     )
     args = parser.parse_args()

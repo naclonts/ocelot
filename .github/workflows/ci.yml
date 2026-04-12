@@ -34,11 +34,11 @@ jobs:
         run: |
           # Strip torch/torchvision lines (already installed above as CPU builds)
           grep -v '^torch' requirements-train.txt > /tmp/req-ci.txt
-          pip install -r /tmp/req-ci.txt flake8
+          pip install -r /tmp/req-ci.txt
 
       - name: Lint
         run: |
-          python -m flake8 train/ ocelot/ sim/ tests/
+          python -m ruff check train/ ocelot/ sim/ tests/
 
       - name: Unit tests (no sim, no GPU)
         # tests/sim/ require the sim container — excluded here

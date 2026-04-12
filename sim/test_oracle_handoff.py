@@ -34,12 +34,12 @@ from sim.scenario_generator.gazebo_bridge import GazeboBridge
 # Positions: robot at origin, faces at x=2.5 m, z=0.9 m
 X = 2.5
 Z = 0.9
-Y_LEFT  =  0.6   # world +Y = left in camera frame when pan≈0
+Y_LEFT = 0.6  # world +Y = left in camera frame when pan≈0
 Y_RIGHT = -0.6
 
-SWAP_SECS  = 10.0   # time for faces to cross (linear interpolation)
-HOLD_SECS  = 10.0   # time to hold each configuration
-STEP_SECS  = 0.1    # update interval
+SWAP_SECS = 10.0  # time for faces to cross (linear interpolation)
+HOLD_SECS = 10.0  # time to hold each configuration
+STEP_SECS = 0.1  # update interval
 
 
 def lerp(a: float, b: float, t: float) -> float:
@@ -50,7 +50,8 @@ def set_oracle_params(label_key: str, num_faces: int) -> None:
     for param, val in [("label_key", label_key), ("num_faces", str(num_faces))]:
         subprocess.run(
             ["ros2", "param", "set", "/oracle_node", param, val],
-            capture_output=True, timeout=3.0,
+            capture_output=True,
+            timeout=3.0,
         )
 
 
@@ -68,7 +69,7 @@ def main() -> None:
     tex1 = str(pngs[1])
 
     print(f"Spawning face_0 ({pngs[0].stem}) and face_1 ({pngs[1].stem})")
-    bridge.spawn_face("face_0", (X, Y_LEFT,  Z), tex0)
+    bridge.spawn_face("face_0", (X, Y_LEFT, Z), tex0)
     bridge.spawn_face("face_1", (X, Y_RIGHT, Z), tex1)
     time.sleep(1.0)
 
@@ -83,9 +84,6 @@ def main() -> None:
             elapsed = time.monotonic() - t_start
             if elapsed >= duration:
                 break
-            frac = min(elapsed / duration, 1.0) if duration > 0 else 1.0
-            cy0 = lerp(Y_LEFT if y0 > 0 else Y_RIGHT, y0, frac) if duration > 0 else y0
-            cy1 = lerp(Y_RIGHT if y1 < 0 else Y_LEFT, y1, frac) if duration > 0 else y1
             bridge.set_pose("face_0", X, y0, Z)
             bridge.set_pose("face_1", X, y1, Z)
             target = "face_0" if y0 >= y1 else "face_1"
@@ -94,7 +92,8 @@ def main() -> None:
                 f"\r[{bar}] {label:30s}  "
                 f"face_0.y={y0:+.2f}  face_1.y={y1:+.2f}  "
                 f"expected target → {target}    ",
-                end="", flush=True,
+                end="",
+                flush=True,
             )
             time.sleep(STEP_SECS)
         print()
@@ -105,18 +104,18 @@ def main() -> None:
 
         print("\n── Phase 2: swap — face_0 crosses to RIGHT (10 s) ─────────────────")
         steps = int(SWAP_SECS / STEP_SECS)
-        t_start = time.monotonic()
         for i in range(steps):
             frac = i / steps
-            y0 = lerp(Y_LEFT,  Y_RIGHT, frac)
-            y1 = lerp(Y_RIGHT, Y_LEFT,  frac)
+            y0 = lerp(Y_LEFT, Y_RIGHT, frac)
+            y1 = lerp(Y_RIGHT, Y_LEFT, frac)
             bridge.set_pose("face_0", X, y0, Z)
             bridge.set_pose("face_1", X, y1, Z)
             target = "face_0" if y0 >= y1 else "face_1"
             print(
                 f"\r  swapping... face_0.y={y0:+.2f}  face_1.y={y1:+.2f}  "
                 f"expected target → {target}    ",
-                end="", flush=True,
+                end="",
+                flush=True,
             )
             time.sleep(STEP_SECS)
         print()
@@ -127,15 +126,16 @@ def main() -> None:
         print("\n── Phase 4: swap back (10 s) ────────────────────────────────────────")
         for i in range(steps):
             frac = i / steps
-            y0 = lerp(Y_RIGHT, Y_LEFT,  frac)
-            y1 = lerp(Y_LEFT,  Y_RIGHT, frac)
+            y0 = lerp(Y_RIGHT, Y_LEFT, frac)
+            y1 = lerp(Y_LEFT, Y_RIGHT, frac)
             bridge.set_pose("face_0", X, y0, Z)
             bridge.set_pose("face_1", X, y1, Z)
             target = "face_0" if y0 >= y1 else "face_1"
             print(
                 f"\r  swapping back... face_0.y={y0:+.2f}  face_1.y={y1:+.2f}  "
                 f"expected target → {target}    ",
-                end="", flush=True,
+                end="",
+                flush=True,
             )
             time.sleep(STEP_SECS)
         print()

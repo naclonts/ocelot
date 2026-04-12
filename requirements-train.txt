@@ -16,3 +16,4 @@ tqdm==4.67.3
 numpy==2.4.2
 opencv-python==4.11.0.86
 pytest
+ruff==0.15.10

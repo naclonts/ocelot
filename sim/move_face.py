@@ -37,21 +37,21 @@ try:
     from gz.msgs10.boolean_pb2 import Boolean
 except ImportError as exc:
     sys.exit(
-        f'gz-transport Python bindings not available: {exc}\n'
-        'Fix: add python3-gz-transport13 and python3-gz-msgs10 to\n'
-        '     deploy/docker/Dockerfile.sim and rebuild the image.'
+        f"gz-transport Python bindings not available: {exc}\n"
+        "Fix: add python3-gz-transport13 and python3-gz-msgs10 to\n"
+        "     deploy/docker/Dockerfile.sim and rebuild the image."
     )
 
 
-WORLD = 'tracker_world'
-MODEL = 'face_0'
-X = 2.0           # fixed distance in front of robot (metres)
-SERVICE = f'/world/{WORLD}/set_pose'
+WORLD = "tracker_world"
+MODEL = "face_0"
+X = 2.0  # fixed distance in front of robot (metres)
+SERVICE = f"/world/{WORLD}/set_pose"
 
 # Single persistent node — ZMQ connection stays open, no per-call teardown.
 _node = Node()
 
-_last_result: bool = True   # track to avoid spamming warnings
+_last_result: bool = True  # track to avoid spamming warnings
 
 
 def set_pose(x: float, y: float, z: float) -> None:
@@ -65,35 +65,47 @@ def set_pose(x: float, y: float, z: float) -> None:
     result, _rep = _node.request(SERVICE, req, Pose, Boolean, 500)
     if result != _last_result:
         if result:
-            print('\n[move_face] service OK — pose updates resuming')
+            print("\n[move_face] service OK — pose updates resuming")
         else:
-            print(f'\n[move_face] WARNING: {SERVICE} returned False (timeout or service unreachable)')
+            print(
+                f"\n[move_face] WARNING: {SERVICE} returned False (timeout or service unreachable)"
+            )
         _last_result = result
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description='Oscillate face billboard for parity check')
-    parser.add_argument('--amp',    type=float, default=0.6,
-                        help='Y oscillation amplitude in metres (default 0.6)')
-    parser.add_argument('--z-amp', type=float, default=0.15,
-                        help='Z oscillation amplitude in metres (default 0.15)')
-    parser.add_argument('--period', type=float, default=12.0,
-                        help='Pan oscillation period in seconds (default 12.0)')
-    parser.add_argument('--z',      type=float, default=0.5,
-                        help='Billboard centre height in metres (default 0.5)')
+    parser = argparse.ArgumentParser(description="Oscillate face billboard for parity check")
+    parser.add_argument(
+        "--amp", type=float, default=0.6, help="Y oscillation amplitude in metres (default 0.6)"
+    )
+    parser.add_argument(
+        "--z-amp", type=float, default=0.15, help="Z oscillation amplitude in metres (default 0.15)"
+    )
+    parser.add_argument(
+        "--period",
+        type=float,
+        default=12.0,
+        help="Pan oscillation period in seconds (default 12.0)",
+    )
+    parser.add_argument(
+        "--z", type=float, default=0.5, help="Billboard centre height in metres (default 0.5)"
+    )
     args = parser.parse_args()
 
-    print(f'Moving {MODEL} in world {WORLD}: '
-          f'Y amp={args.amp} m, Z amp={args.z_amp} m, period={args.period} s')
-    print(f'Service: {SERVICE}')
-    print('Press Ctrl-C to stop.')
+    print(
+        f"Moving {MODEL} in world {WORLD}: "
+        f"Y amp={args.amp} m, Z amp={args.z_amp} m, period={args.period} s"
+    )
+    print(f"Service: {SERVICE}")
+    print("Press Ctrl-C to stop.")
 
     # Probe: list available services and warn if ours is absent.
     services = _node.service_list()
     if SERVICE not in services:
-        print(f'[move_face] WARNING: {SERVICE!r} not in service list.')
-        print(f'  Available services: {services if services else "(none — gz transport not connected?)"}')
-        print('  Is the sim running? Will keep trying...')
+        print(f"[move_face] WARNING: {SERVICE!r} not in service list.")
+        available = services if services else "(none — gz transport not connected?)"
+        print(f"  Available services: {available}")
+        print("  Is the sim running? Will keep trying...")
 
     t0 = time.monotonic()
     hz = 10.0
@@ -106,13 +118,13 @@ def main() -> None:
             # Tilt at 1.7× the pan period — incommensurate so the path doesn't repeat
             z = args.z + args.z_amp * math.sin(2 * math.pi * t / (args.period * 1.7))
             set_pose(X, y, z)
-            print(f'  face_0 → y={y:+.3f} z={z:.3f}  (t={t:.1f}s)', end='\r')
+            print(f"  face_0 → y={y:+.3f} z={z:.3f}  (t={t:.1f}s)", end="\r")
             time.sleep(dt)
     except KeyboardInterrupt:
-        print('\nStopped.')
+        print("\nStopped.")
         # Park face at a slightly off-centre position so tracker stays active
         set_pose(X, 0.3, args.z)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

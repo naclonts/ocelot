@@ -47,22 +47,22 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-CAMERA_HZ          = 10
-EPISODE_SECS       = 10.0
-WARMUP_SECS        = 4.0
+CAMERA_HZ = 10
+EPISODE_SECS = 10.0
+WARMUP_SECS = 4.0
 FRAMES_PER_EPISODE = int(EPISODE_SECS * CAMERA_HZ)
 
 # Camera intrinsics from URDF (640×480, HFOV=60°=1.0472 rad)
 _IMG_W, _IMG_H = 640, 480
-_CX, _CY       = _IMG_W // 2, _IMG_H // 2
-_FX             = (_IMG_W / 2) / math.tan(1.0472 / 2)   # ≈ 554.3 px
-_FY             = _FX                                     # square pixels
+_CX, _CY = _IMG_W // 2, _IMG_H // 2
+_FX = (_IMG_W / 2) / math.tan(1.0472 / 2)  # ≈ 554.3 px
+_FY = _FX  # square pixels
 
 # FK constants — mirror oracle_node.py
-_PAN_Z  = 0.03
+_PAN_Z = 0.03
 _TILT_Z = 0.03
-_CAM_X  = 0.02
-_CAM_Z  = 0.01
+_CAM_X = 0.02
+_CAM_Z = 0.01
 
 # Match sim/data_gen/collect_data.py so preview clips can mirror the
 # perturbation cadence used during training-data collection.
@@ -72,27 +72,28 @@ _PERTURB_FOV_V = math.radians(20)
 _WORLD_CAM_Z = 0.07
 
 # Annotation colours (BGR)
-_CYAN   = (255, 200, 0)
-_RED    = (0, 60, 220)
-_GREY   = (180, 180, 180)
+_CYAN = (255, 200, 0)
+_RED = (0, 60, 220)
+_GREY = (180, 180, 180)
 _YELLOW = (80, 230, 255)
-_WHITE  = (255, 255, 255)
+_WHITE = (255, 255, 255)
 
 _ORACLE_LABEL_MAP = {
-    "track":       "track",
-    "multi_left":  "multi_left",
+    "track": "track",
+    "multi_left": "multi_left",
     "multi_right": "multi_right",
-    "multi_attr":  "track",
-    "centered":    "track",
-    "no_face":     "track",
+    "multi_attr": "track",
+    "centered": "track",
+    "no_face": "track",
 }
 
 
 class PerturbController:
     """Inject periodic angular perturbations into face_0 like training collection."""
 
-    def __init__(self, interval: int, range_rad: float, seed: int,
-                 duration: int = PERTURB_DURATION):
+    def __init__(
+        self, interval: int, range_rad: float, seed: int, duration: int = PERTURB_DURATION
+    ):
         self.interval = interval
         self.range_rad = range_rad
         self.duration = duration
@@ -154,8 +155,8 @@ def _project_face(face_pos: np.ndarray, pan: float, tilt: float) -> "tuple[int, 
     """
     R_cam = _rz(pan) @ _ry(tilt)
     P_tilt = np.array([0.0, 0.0, _PAN_Z + _TILT_Z])
-    P_cam  = P_tilt + R_cam @ np.array([_CAM_X, 0.0, _CAM_Z])
-    d_cam  = R_cam.T @ (face_pos - P_cam)
+    P_cam = P_tilt + R_cam @ np.array([_CAM_X, 0.0, _CAM_Z])
+    d_cam = R_cam.T @ (face_pos - P_cam)
 
     if d_cam[0] <= 0.01:
         return None
@@ -184,13 +185,30 @@ def _annotate_frame(
     arm = 14
     cv2.line(frame, (cx - arm, cy), (cx + arm, cy), _GREY, 1, cv2.LINE_AA)
     cv2.line(frame, (cx, cy - arm), (cx, cy + arm), _GREY, 1, cv2.LINE_AA)
-    cv2.putText(frame, f"pan  {cmd.angular.z:+.2f}",
-                (8, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, _YELLOW, 1, cv2.LINE_AA)
-    cv2.putText(frame, f"tilt {cmd.angular.y:+.2f}",
-                (8, 42), cv2.FONT_HERSHEY_SIMPLEX, 0.5, _YELLOW, 1, cv2.LINE_AA)
+    cv2.putText(
+        frame,
+        f"pan  {cmd.angular.z:+.2f}",
+        (8, 20),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.5,
+        _YELLOW,
+        1,
+        cv2.LINE_AA,
+    )
+    cv2.putText(
+        frame,
+        f"tilt {cmd.angular.y:+.2f}",
+        (8, 42),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.5,
+        _YELLOW,
+        1,
+        cv2.LINE_AA,
+    )
     if episode_cmd:
-        cv2.putText(frame, episode_cmd,
-                    (8, h - 12), cv2.FONT_HERSHEY_SIMPLEX, 0.45, _WHITE, 1, cv2.LINE_AA)
+        cv2.putText(
+            frame, episode_cmd, (8, h - 12), cv2.FONT_HERSHEY_SIMPLEX, 0.45, _WHITE, 1, cv2.LINE_AA
+        )
 
     if face_pos is None:
         return frame
@@ -211,28 +229,26 @@ class PreviewNode(Node):
     def __init__(self):
         super().__init__("preview_episode")
         self._bridge = CvBridge()
-        self._lock   = threading.Lock()
+        self._lock = threading.Lock()
 
-        self._latest_raw: np.ndarray | None       = None
-        self._face_pos: np.ndarray | None          = None
-        self._pan: float  = 0.0
+        self._latest_raw: np.ndarray | None = None
+        self._face_pos: np.ndarray | None = None
+        self._pan: float = 0.0
         self._tilt: float = 0.0
         self._latest_cmd = Twist()
         self._latest_episode_cmd = ""
 
-        self._frame_event      = threading.Event()
-        self._joints_received  = threading.Event()
+        self._frame_event = threading.Event()
+        self._joints_received = threading.Event()
 
         self._cmd_pub = self.create_publisher(String, "/episode/cmd", 1)
-        self._oracle_client = self.create_client(
-            SetParameters, "/oracle_node/set_parameters"
-        )
+        self._oracle_client = self.create_client(SetParameters, "/oracle_node/set_parameters")
         self._oracle_ready = False
 
-        self.create_subscription(Image,      "/camera/image_raw", self._on_image, 10)
-        self.create_subscription(JointState, "/joint_states",     self._on_joints, 10)
-        self.create_subscription(Pose,       "/model/face_0/pose", self._on_face, 10)
-        self.create_subscription(Twist,      "/cmd_vel",           self._on_cmd_vel, 10)
+        self.create_subscription(Image, "/camera/image_raw", self._on_image, 10)
+        self.create_subscription(JointState, "/joint_states", self._on_joints, 10)
+        self.create_subscription(Pose, "/model/face_0/pose", self._on_face, 10)
+        self.create_subscription(Twist, "/cmd_vel", self._on_cmd_vel, 10)
 
     def _on_image(self, msg: Image) -> None:
         frame = self._bridge.imgmsg_to_cv2(msg, "bgr8")
@@ -251,9 +267,7 @@ class PreviewNode(Node):
 
     def _on_face(self, msg: Pose) -> None:
         with self._lock:
-            self._face_pos = np.array(
-                [msg.position.x, msg.position.y, msg.position.z]
-            )
+            self._face_pos = np.array([msg.position.x, msg.position.y, msg.position.z])
 
     def _on_cmd_vel(self, msg: Twist) -> None:
         with self._lock:
@@ -285,8 +299,7 @@ class PreviewNode(Node):
             self._latest_episode_cmd = text
         self._cmd_pub.publish(msg)
 
-    def configure_oracle(self, label_key: str, num_faces: int,
-                         timeout: float = 10.0) -> None:
+    def configure_oracle(self, label_key: str, num_faces: int, timeout: float = 10.0) -> None:
         oracle_label = _ORACLE_LABEL_MAP.get(label_key, "track")
         if not self._oracle_ready:
             if not self._oracle_client.wait_for_service(timeout_sec=timeout):
@@ -296,15 +309,11 @@ class PreviewNode(Node):
             self._oracle_ready = True
 
         lk = RclParameter()
-        lk.name  = "label_key"
-        lk.value = ParameterValue(
-            type=ParameterType.PARAMETER_STRING, string_value=oracle_label
-        )
+        lk.name = "label_key"
+        lk.value = ParameterValue(type=ParameterType.PARAMETER_STRING, string_value=oracle_label)
         nf = RclParameter()
-        nf.name  = "num_faces"
-        nf.value = ParameterValue(
-            type=ParameterType.PARAMETER_INTEGER, integer_value=num_faces
-        )
+        nf.name = "num_faces"
+        nf.value = ParameterValue(type=ParameterType.PARAMETER_INTEGER, integer_value=num_faces)
         req = SetParameters.Request()
         req.parameters = [lk, nf]
 
@@ -323,10 +332,17 @@ def main() -> None:
     p = argparse.ArgumentParser(
         description="Record one oracle-driven episode to mp4 (annotated frames)."
     )
-    p.add_argument("--seed", type=int, default=280,
-                   help="Scenario seed. Default 280 = sinusoidal / outdoor_forest / 1 face.")
-    p.add_argument("--out", default="/ws/src/ocelot/preview.mp4",
-                   help="Output mp4 path. Default: /ws/src/ocelot/preview.mp4")
+    p.add_argument(
+        "--seed",
+        type=int,
+        default=280,
+        help="Scenario seed. Default 280 = sinusoidal / outdoor_forest / 1 face.",
+    )
+    p.add_argument(
+        "--out",
+        default="/ws/src/ocelot/preview.mp4",
+        help="Output mp4 path. Default: /ws/src/ocelot/preview.mp4",
+    )
     p.add_argument(
         "--skip-oracle-config",
         action="store_true",
@@ -373,7 +389,9 @@ def main() -> None:
     log.info("Waiting for sim stack (/joint_states) …")
     if not node.wait_ready(timeout=90.0):
         log.error("Timed out — is sim_launch.py running?")
-        node.destroy_node(); rclpy.shutdown(); sys.exit(1)
+        node.destroy_node()
+        rclpy.shutdown()
+        sys.exit(1)
     log.info("Sim ready.")
 
     generator = ScenarioGenerator(
@@ -391,8 +409,11 @@ def main() -> None:
     )
     log.info(
         "seed=%d  n_faces=%d  bg=%s  motion=%s  label=%s",
-        args.seed, len(config.faces), config.background_id,
-        config.faces[0].motion if config.faces else "?", config.label_key,
+        args.seed,
+        len(config.faces),
+        config.background_id,
+        config.faces[0].motion if config.faces else "?",
+        config.label_key,
     )
 
     if args.skip_oracle_config:
@@ -431,7 +452,9 @@ def main() -> None:
 
     if not frames:
         log.error("No frames — mp4 not saved.")
-        node.destroy_node(); rclpy.shutdown(); sys.exit(1)
+        node.destroy_node()
+        rclpy.shutdown()
+        sys.exit(1)
 
     # ── Save mp4 ──────────────────────────────────────────────────────────────
     out_path = Path(args.out)

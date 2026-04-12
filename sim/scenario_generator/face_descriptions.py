@@ -37,136 +37,142 @@ from typing import Optional
 
 # (internal_key, display_string, relative_weight)
 _GENDER = [
-    ("man",   "man",   1),
+    ("man", "man", 1),
     ("woman", "woman", 1),
 ]
 
 _AGE = [
-    ("young_adult", "young",        1),
-    ("middle_aged", "middle-aged",  1),
-    ("older",       "older",        1),
+    ("young_adult", "young", 1),
+    ("middle_aged", "middle-aged", 1),
+    ("older", "older", 1),
 ]
 
 _SKIN_TONE = [
-    ("light",       "light",        1),
-    ("medium_light","medium-light", 1),
-    ("medium",      "medium",       1),
-    ("olive",       "olive",        1),
-    ("brown",       "brown",        1),
-    ("dark",        "dark",         1),
+    ("light", "light", 1),
+    ("medium_light", "medium-light", 1),
+    ("medium", "medium", 1),
+    ("olive", "olive", 1),
+    ("brown", "brown", 1),
+    ("dark", "dark", 1),
 ]
 
 # hair_length: None means bald (handled separately)
 _HAIR_LENGTH = [
-    (None,      None,            0.47),  # bald ≈ 5% of shots
-    ("cropped", "very short",    2),
-    ("short",   "short",         3),
-    ("medium",  "medium-length", 2),
-    ("long",    "long",          2),
+    (None, None, 0.47),  # bald ≈ 5% of shots
+    ("cropped", "very short", 2),
+    ("short", "short", 3),
+    ("medium", "medium-length", 2),
+    ("long", "long", 2),
 ]
 
 _HAIR_COLOR = [
-    ("black",       "black",      3),
-    ("dark_brown",  "dark brown", 3),
-    ("brown",       "brown",      3),
-    ("auburn",      "auburn",     1),
-    ("blonde",      "blonde",     2),
-    ("red",         "red",        1),
-    ("gray",        "gray",       1),
-    ("white",       "white",      1),
+    ("black", "black", 3),
+    ("dark_brown", "dark brown", 3),
+    ("brown", "brown", 3),
+    ("auburn", "auburn", 1),
+    ("blonde", "blonde", 2),
+    ("red", "red", 1),
+    ("gray", "gray", 1),
+    ("white", "white", 1),
 ]
 
 _HAIR_STYLE = [
-    ("straight", "straight",   4),
-    ("wavy",     "wavy",       2),
-    ("curly",    "curly",      2),
-    ("afro",     "afro",       1),
-    ("braided",  "braided",    1),
-    ("dreadlocks","dreadlocked",1),
+    ("straight", "straight", 4),
+    ("wavy", "wavy", 2),
+    ("curly", "curly", 2),
+    ("afro", "afro", 1),
+    ("braided", "braided", 1),
+    ("dreadlocks", "dreadlocked", 1),
 ]
 
 # Facial hair — only sampled for men; None = clean-shaven
 _FACIAL_HAIR_MAN = [
-    (None,        None,             4),   # clean-shaven
-    ("stubble",   "light stubble",  2),
-    ("beard",     "a full beard",   2),
-    ("mustache",  "a mustache",     1),
-    ("goatee",    "a goatee",       1),
+    (None, None, 4),  # clean-shaven
+    ("stubble", "light stubble", 2),
+    ("beard", "a full beard", 2),
+    ("mustache", "a mustache", 1),
+    ("goatee", "a goatee", 1),
 ]
 
 # Hats — sampled for all; None = no hat (higher weight)
 _HAT = [
-    (None,           None,                    5),
-    ("baseball_cap", "a baseball cap",        2),
-    ("beanie",       "a beanie",              1),
-    ("fedora",       "a fedora",              1),
-    ("wide_brim",    "a wide-brimmed sun hat",1),
-    ("pirate_hat",   "a pirate hat",          0.12),  # ≈ 1 in 100 shots
-    ("cowboy_hat",   "a cowboy hat",          1),
+    (None, None, 5),
+    ("baseball_cap", "a baseball cap", 2),
+    ("beanie", "a beanie", 1),
+    ("fedora", "a fedora", 1),
+    ("wide_brim", "a wide-brimmed sun hat", 1),
+    ("pirate_hat", "a pirate hat", 0.12),  # ≈ 1 in 100 shots
+    ("cowboy_hat", "a cowboy hat", 1),
 ]
 
 # Glasses — None = no glasses (higher weight)
 _GLASSES = [
-    (None,          None,                     4),
-    ("reading",     "reading glasses",        2),
-    ("round",       "round glasses",          1),
-    ("rectangular", "rectangular glasses",    2),
-    ("thick_rimmed","thick-rimmed glasses",   1),
-    ("sunglasses",  "dark sunglasses",        1),
+    (None, None, 4),
+    ("reading", "reading glasses", 2),
+    ("round", "round glasses", 1),
+    ("rectangular", "rectangular glasses", 2),
+    ("thick_rimmed", "thick-rimmed glasses", 1),
+    ("sunglasses", "dark sunglasses", 1),
 ]
 
 _EXPRESSION = [
-    ("neutral",       "a neutral expression",  3),
-    ("slight_smile",  "a slight smile",        2),
-    ("big_grin",      "a big grin",            1),
-    ("serious",       "a serious expression",  1),
+    ("neutral", "a neutral expression", 3),
+    ("slight_smile", "a slight smile", 2),
+    ("big_grin", "a big grin", 1),
+    ("serious", "a serious expression", 1),
 ]
 
 # Shirt type and color — only used in prompts for chest_up / waist_up shots
 _SHIRT_TYPE = [
-    ("t_shirt",  "t-shirt", 2),
-    ("hoodie",   "hoodie",  1),
-    ("sweater",  "sweater", 1),
+    ("t_shirt", "t-shirt", 2),
+    ("hoodie", "hoodie", 1),
+    ("sweater", "sweater", 1),
 ]
 
 _SHIRT_COLOR = [
-    ("red",        "red",         1),
-    ("blue",       "blue",        1),
-    ("green",      "green",       1),
-    ("black",      "black",       1),
-    ("white",      "white",       1),
-    ("navy",       "navy",        1),
-    ("gray",       "gray",        1),
-    ("yellow",     "yellow",      1),
-    ("orange",     "orange",      1),
-    ("purple",     "purple",      1),
-    ("pink",       "pink",        1),
-    ("teal",       "teal",        1),
-    ("maroon",     "maroon",      1),
-    ("olive",      "olive",       1),
-    ("brown",      "brown",       1),
-    ("coral",      "coral",       1),
+    ("red", "red", 1),
+    ("blue", "blue", 1),
+    ("green", "green", 1),
+    ("black", "black", 1),
+    ("white", "white", 1),
+    ("navy", "navy", 1),
+    ("gray", "gray", 1),
+    ("yellow", "yellow", 1),
+    ("orange", "orange", 1),
+    ("purple", "purple", 1),
+    ("pink", "pink", 1),
+    ("teal", "teal", 1),
+    ("maroon", "maroon", 1),
+    ("olive", "olive", 1),
+    ("brown", "brown", 1),
+    ("coral", "coral", 1),
 ]
 
 # Over-clothing accessories — None = nothing (higher weight)
 _ACCESSORY = [
-    (None,                   None,                   5    ),
-    ("over_ear_headphones",  "over-ear headphones",  0.1  ),  # ≈ 1 in 50 shots
-    ("scarf",                "a scarf",              0.167),  # ≈ 1 in 30 shots
+    (None, None, 5),
+    ("over_ear_headphones", "over-ear headphones", 0.1),  # ≈ 1 in 50 shots
+    ("scarf", "a scarf", 0.167),  # ≈ 1 in 30 shots
 ]
 
 # How much of the body is visible.  Randomized so the bottom cutoff line is
 # never a reliable cue the policy can latch onto.
 # Weights give: waist_up 50%, chest_up 30%, neck_up 20%.
 _CROP_LEVEL = [
-    ("neck_up",   "portrait from the neck up",                                           2),
-    ("chest_up",  "upper body portrait showing face, neck, shoulders, and upper chest",  3),
-    ("waist_up",  "half-body portrait showing full figure from crown to hips, entire torso and both arms visible down to the waist", 5),
+    ("neck_up", "portrait from the neck up", 2),
+    ("chest_up", "upper body portrait showing face, neck, shoulders, and upper chest", 3),
+    (
+        "waist_up",
+        "half-body portrait showing full figure from crown to hips, "
+        "entire torso and both arms visible down to the waist",
+        5,
+    ),
 ]
 
 # ---------------------------------------------------------------------------
 # Sampling helpers
 # ---------------------------------------------------------------------------
+
 
 def _weighted_choice(rng: random.Random, pool):
     """Pick one item from a weighted pool list of (key, display, weight)."""
@@ -178,29 +184,30 @@ def _weighted_choice(rng: random.Random, pool):
 # Core dataclass
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class FaceDescription:
-    face_id:      str
-    gender:       str
-    age_range:    str
-    skin_tone:    str
+    face_id: str
+    gender: str
+    age_range: str
+    skin_tone: str
     # hair
-    hair_length:  Optional[str]   # None → bald
-    hair_color:   Optional[str]   # None → bald
-    hair_style:   Optional[str]   # None → bald
+    hair_length: Optional[str]  # None → bald
+    hair_color: Optional[str]  # None → bald
+    hair_style: Optional[str]  # None → bald
     # accessories
-    facial_hair:  Optional[str]   # None → clean-shaven / N/A for women
-    hat:          Optional[str]   # None → no hat
-    glasses:      Optional[str]   # None → no glasses
-    accessory:    Optional[str]   # None → none; over_ear_headphones | scarf
+    facial_hair: Optional[str]  # None → clean-shaven / N/A for women
+    hat: Optional[str]  # None → no hat
+    glasses: Optional[str]  # None → no glasses
+    accessory: Optional[str]  # None → none; over_ear_headphones | scarf
     # clothing — None when crop_level is neck_up
-    shirt:        Optional[str]   # None when not visible; e.g. "red t-shirt"
+    shirt: Optional[str]  # None when not visible; e.g. "red t-shirt"
     # affect
-    expression:   str
+    expression: str
     # composition — randomized so bottom cutoff is never a consistent cue
-    crop_level:   str             # neck_up | chest_up | waist_up
+    crop_level: str  # neck_up | chest_up | waist_up
     # derived
-    prompt:       str             # ready-to-use image-gen prompt
+    prompt: str  # ready-to-use image-gen prompt
 
 
 def _build_prompt(attrs: dict) -> str:
@@ -211,8 +218,8 @@ def _build_prompt(attrs: dict) -> str:
     parts = []
 
     # Opening line
-    age   = attrs["age_display"]
-    skin  = attrs["skin_display"]
+    age = attrs["age_display"]
+    skin = attrs["skin_display"]
     gender = attrs["gender"]
     article = "an" if age[0] in "aeiou" else "a"
     parts.append(f"Portrait photo of {article} {age} {skin}-skinned {gender}")
@@ -252,7 +259,10 @@ def _build_prompt(attrs: dict) -> str:
     parts.append(f"with {attrs['expression_display']}")
 
     # Quality / composition suffix — crop_level controls how much body is visible
-    crop_desc = attrs.get("crop_level_display", "upper body portrait showing face, neck, shoulders, and upper chest")
+    crop_desc = attrs.get(
+        "crop_level_display",
+        "upper body portrait showing face, neck, shoulders, and upper chest",
+    )
     parts.append(
         f"facing the camera, photorealistic, {crop_desc}, "
         f"complete head fully in frame with crown and top of hair visible, "
@@ -265,6 +275,7 @@ def _build_prompt(attrs: dict) -> str:
 # ---------------------------------------------------------------------------
 # Generator
 # ---------------------------------------------------------------------------
+
 
 def generate_face_descriptions(
     count: int = 80,
@@ -285,9 +296,9 @@ def generate_face_descriptions(
     faces: list[FaceDescription] = []
 
     # Build cycling pools as (key, display) tuples, weighted then shuffled
-    gender_cycle = [(k, k) for k, _, w in _GENDER     for _ in range(w)]
-    age_cycle    = [(k, d) for k, d, w in _AGE        for _ in range(w)]
-    skin_cycle   = [(k, d) for k, d, w in _SKIN_TONE  for _ in range(w)]
+    gender_cycle = [(k, k) for k, _, w in _GENDER for _ in range(w)]
+    age_cycle = [(k, d) for k, d, w in _AGE for _ in range(w)]
+    skin_cycle = [(k, d) for k, d, w in _SKIN_TONE for _ in range(w)]
     rng.shuffle(gender_cycle)
     rng.shuffle(age_cycle)
     rng.shuffle(skin_cycle)
@@ -296,14 +307,14 @@ def generate_face_descriptions(
         face_id = f"face_{start_id + i:03d}"
 
         # Primary axes — cycled for guaranteed even coverage
-        gender_key              = gender_cycle[i % len(gender_cycle)][0]
-        age_key,  age_disp      = age_cycle[i   % len(age_cycle)]
-        skin_key, skin_disp     = skin_cycle[i  % len(skin_cycle)]
+        gender_key = gender_cycle[i % len(gender_cycle)][0]
+        age_key, age_disp = age_cycle[i % len(age_cycle)]
+        skin_key, skin_disp = skin_cycle[i % len(skin_cycle)]
 
         # Hair
         hair_len_entry = _weighted_choice(rng, _HAIR_LENGTH)
         hair_len_key, hair_len_disp = hair_len_entry[0], hair_len_entry[1]
-        bald = (hair_len_key is None)
+        bald = hair_len_key is None
 
         if bald:
             hair_color_key = hair_color_disp = None
@@ -344,44 +355,46 @@ def generate_face_descriptions(
         shirt_type_key, shirt_type_disp = st[0], st[1]
         sc = _weighted_choice(rng, _SHIRT_COLOR)
         shirt_color_key, shirt_color_disp = sc[0], sc[1]
-        shirt_key  = f"{shirt_color_key}_{shirt_type_key}"
+        shirt_key = f"{shirt_color_key}_{shirt_type_key}"
         shirt_disp = f"{shirt_color_disp} {shirt_type_disp}" if crop_key != "neck_up" else None
 
         # Build prompt
         prompt_attrs = dict(
-            gender              = gender_key,
-            age_display         = age_disp,
-            skin_display        = skin_disp,
-            hair_length_display = hair_len_disp,
-            hair_color_display  = hair_color_disp,
-            hair_style_display  = hair_style_disp,
-            facial_hair_display = facial_hair_disp,
-            hat_display         = hat_disp,
-            glasses_display     = glasses_disp,
-            accessory_display   = accessory_disp,
-            shirt_display       = shirt_disp,
-            expression_display  = expr_disp,
-            crop_level_display  = crop_disp,
+            gender=gender_key,
+            age_display=age_disp,
+            skin_display=skin_disp,
+            hair_length_display=hair_len_disp,
+            hair_color_display=hair_color_disp,
+            hair_style_display=hair_style_disp,
+            facial_hair_display=facial_hair_disp,
+            hat_display=hat_disp,
+            glasses_display=glasses_disp,
+            accessory_display=accessory_disp,
+            shirt_display=shirt_disp,
+            expression_display=expr_disp,
+            crop_level_display=crop_disp,
         )
         prompt = _build_prompt(prompt_attrs)
 
-        faces.append(FaceDescription(
-            face_id      = face_id,
-            gender       = gender_key,
-            age_range    = age_key,
-            skin_tone    = skin_key,
-            hair_length  = hair_len_key,
-            hair_color   = hair_color_key,
-            hair_style   = hair_style_key,
-            facial_hair  = facial_hair_key,
-            hat          = hat_key,
-            glasses      = glasses_key,
-            accessory    = accessory_key,
-            shirt        = shirt_key if crop_key != "neck_up" else None,
-            expression   = expr_key,
-            crop_level   = crop_key,
-            prompt       = prompt,
-        ))
+        faces.append(
+            FaceDescription(
+                face_id=face_id,
+                gender=gender_key,
+                age_range=age_key,
+                skin_tone=skin_key,
+                hair_length=hair_len_key,
+                hair_color=hair_color_key,
+                hair_style=hair_style_key,
+                facial_hair=facial_hair_key,
+                hat=hat_key,
+                glasses=glasses_key,
+                accessory=accessory_key,
+                shirt=shirt_key if crop_key != "neck_up" else None,
+                expression=expr_key,
+                crop_level=crop_key,
+                prompt=prompt,
+            )
+        )
 
     return faces
 
@@ -390,20 +403,24 @@ def generate_face_descriptions(
 # CLI entry point
 # ---------------------------------------------------------------------------
 
+
 def main():
     parser = argparse.ArgumentParser(
         description="Generate face description prompts for AI image generation."
     )
     parser.add_argument(
-        "--count", type=int, default=80,
-        help="Number of face descriptions to generate (default: 80)"
+        "--count",
+        type=int,
+        default=80,
+        help="Number of face descriptions to generate (default: 80)",
     )
     parser.add_argument(
-        "--seed", type=int, default=42,
-        help="Random seed for reproducibility (default: 42)"
+        "--seed", type=int, default=42, help="Random seed for reproducibility (default: 42)"
     )
     parser.add_argument(
-        "--out", type=Path, default=Path("sim/scenario_generator"),
+        "--out",
+        type=Path,
+        default=Path("sim/scenario_generator"),
         help=(
             "Output path: a directory (writes face_descriptions.json inside it) "
             "or a .json file path (e.g. sim/scenario_generator/face_descriptions_003.json). "
@@ -411,7 +428,10 @@ def main():
         ),
     )
     parser.add_argument(
-        "--append-to", type=Path, nargs="+", metavar="JSON",
+        "--append-to",
+        type=Path,
+        nargs="+",
+        metavar="JSON",
         help=(
             "One or more existing face_descriptions JSON files to load. "
             "New faces are generated starting from last_id+1 and the combined "
@@ -436,11 +456,12 @@ def main():
             with open(p) as f:
                 existing.extend(json.load(f))
         if existing:
-            last_num = max(
-                int(face["face_id"].split("_")[1]) for face in existing
-            )
+            last_num = max(int(face["face_id"].split("_")[1]) for face in existing)
             start_id = last_num + 1
-            print(f"Loaded {len(existing)} existing faces from {len(args.append_to)} file(s). Next id: face_{start_id:03d}")
+            print(
+                f"Loaded {len(existing)} existing faces from "
+                f"{len(args.append_to)} file(s). Next id: face_{start_id:03d}"
+            )
 
     new_faces = generate_face_descriptions(count=args.count, seed=args.seed, start_id=start_id)
     combined = existing + [asdict(face) for face in new_faces]
@@ -452,12 +473,23 @@ def main():
     print()
     print("=== Attribute coverage (new faces) ===")
     from collections import Counter
-    attrs_to_check = ["gender", "age_range", "skin_tone", "crop_level", "hat", "glasses", "facial_hair", "accessory", "shirt"]
+
+    attrs_to_check = [
+        "gender",
+        "age_range",
+        "skin_tone",
+        "crop_level",
+        "hat",
+        "glasses",
+        "facial_hair",
+        "accessory",
+        "shirt",
+    ]
     for attr in attrs_to_check:
         counts = Counter(getattr(f, attr) for f in new_faces)
         print(f"  {attr}:")
         for val, n in sorted(counts.items(), key=lambda x: -x[1]):
-            print(f"    {str(val):<20s} {n:3d}  ({100*n/len(new_faces):.0f}%)")
+            print(f"    {str(val):<20s} {n:3d}  ({100 * n / len(new_faces):.0f}%)")
 
 
 if __name__ == "__main__":
